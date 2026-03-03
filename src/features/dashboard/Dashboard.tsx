@@ -1,48 +1,202 @@
 import { Users, PhoneCall, Zap, Calendar as CalendarIcon } from 'lucide-react';
 import { useLeads } from '../../context/LeadsContext';
 import { isSameDay, parseISO } from 'date-fns';
-import { LeadList } from '../leads/LeadList';
 
 export function Dashboard() {
-    const { leads } = useLeads();
+    const { leads, users } = useLeads();
 
-    const totalLeads = leads.length;
+    const today = new Date();
     const hotLeads = leads.filter(l => l.leadType === 'hot').length;
-    const followupsToday = leads.filter(l => {
-        const today = new Date();
-        const leadDate = parseISO(l.followupDate);
-        return isSameDay(today, leadDate);
-    }).length;
-    const newLeads = leads.filter(l => l.status === 'new').length;
+    const warmLeads = leads.filter(l => l.leadType === 'warm').length;
+    const coldLeads = leads.filter(l => l.leadType === 'cold').length;
+    const unassignedLeads = leads.filter(l => !l.assignedTo).length;
 
-    const cards = [
-        { title: 'Total Leads', value: totalLeads, icon: Users, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+    const todaysFollowupsCount = leads.filter(l => {
+        if (!l.followupDate || l.status === 'closed' || l.status === 'lost') return false;
+        return isSameDay(parseISO(l.followupDate), today);
+    }).length;
+
+    const missedFollowups = leads.filter(l => {
+        if (!l.followupDate || l.status === 'closed' || l.status === 'lost') return false;
+        const fDate = parseISO(l.followupDate);
+        return fDate < today && !isSameDay(today, fDate);
+    }).length;
+
+    const row1 = [
         { title: 'Hot Leads', value: hotLeads, icon: Zap, color: 'text-red-500', bg: 'bg-red-50' },
-        { title: 'Follow-ups Today', value: followupsToday, icon: PhoneCall, color: 'text-amber-500', bg: 'bg-amber-50' },
-        { title: 'New Leads', value: newLeads, icon: CalendarIcon, color: 'text-emerald-500', bg: 'bg-emerald-50' },
+        { title: 'Warm Leads', value: warmLeads, icon: PhoneCall, color: 'text-amber-500', bg: 'bg-amber-50' },
+        { title: 'Cold Leads', value: coldLeads, icon: Users, color: 'text-blue-500', bg: 'bg-blue-50' },
+        { title: 'Total Leads', value: leads.length, icon: CalendarIcon, color: 'text-gray-600', bg: 'bg-gray-50' },
     ];
 
+    const row2 = [
+        { title: 'Unassigned', value: unassignedLeads, icon: CalendarIcon, color: 'text-orange-500', bg: 'bg-orange-50' },
+        { title: 'Today\'s Follow-ups', value: todaysFollowupsCount, icon: CalendarIcon, color: 'text-emerald-600', bg: 'bg-emerald-50' },
+        { title: 'Missed Follow-ups', value: missedFollowups, icon: Zap, color: 'text-red-600', bg: 'bg-red-50' },
+    ];
+
+    const originBreakdown = leads.reduce((acc, lead) => {
+        acc[lead.leadOrigin] = (acc[lead.leadOrigin] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    const statusBreakdown = leads.reduce((acc, lead) => {
+        acc[lead.status] = (acc[lead.status] || 0) + 1;
+        return acc;
+    }, {} as Record<string, number>);
+
+    // Per-user statistics
+    const userPerformance = users.map(user => {
+        const userLeads = leads.filter(l => {
+            const assignedId = typeof l.assignedTo === 'object' ? l.assignedTo?._id : l.assignedTo;
+            return assignedId === user._id;
+        });
+
+        const todayFollowups = userLeads.filter(l => l.followupDate && isSameDay(parseISO(l.followupDate), today) && l.status !== 'closed' && l.status !== 'lost').length;
+        const missedUFollowups = userLeads.filter(l => {
+            if (!l.followupDate || l.status === 'closed' || l.status === 'lost') return false;
+            const fDate = parseISO(l.followupDate);
+            return fDate < today && !isSameDay(today, fDate);
+        }).length;
+
+        return {
+            ...user,
+            totalAssigned: userLeads.length,
+            todayFollowups,
+            missedFollowups: missedUFollowups
+        };
+    });
+
     return (
-        <div className="flex flex-col gap-8">
-            <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
-                {cards.map((card, idx) => (
-                    <div key={idx} className="flex items-center gap-4 rounded-xl border border-gray-100 bg-white p-6 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md">
-                        <div className={`flex h-12 w-12 items-center justify-center rounded-xl ${card.bg} ${card.color}`}>
-                            <card.icon size={24} />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-sm font-medium text-gray-500">{card.title}</span>
-                            <span className="text-2xl font-bold text-gray-900">{card.value}</span>
-                        </div>
+        <div className="flex flex-col gap-8 pb-12">
+            {missedFollowups > 0 && (
+                <div className="flex items-center justify-between rounded-xl border border-red-100 bg-red-50 px-6 py-4 animate-pulse">
+                    <div className="flex items-center gap-3 text-red-700">
+                        <Zap size={20} className="fill-current" />
+                        <span className="font-bold text-sm">Action Required: You have {missedFollowups} missed follow-ups!</span>
                     </div>
-                ))}
+                    <button
+                        onClick={() => window.dispatchEvent(new CustomEvent('switchTab', { detail: 'followups' }))}
+                        className="text-xs font-bold uppercase tracking-wider text-red-600 hover:underline"
+                    >
+                        View Now
+                    </button>
+                </div>
+            )}
+
+            <div className="flex flex-col gap-4">
+                {/* Row 1: Key Stages */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+                    {row1.map((card, idx) => (
+                        <div key={idx} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.bg} ${card.color}`}>
+                                <card.icon size={20} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[11px] font-bold uppercase tracking-tight text-gray-400 truncate mb-0.5">{card.title}</span>
+                                <span className="text-xl font-bold text-gray-900 leading-none">{card.value}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
+
+                {/* Row 2: Secondary Metrics */}
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {row2.map((card, idx) => (
+                        <div key={idx} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md">
+                            <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.bg} ${card.color}`}>
+                                <card.icon size={20} />
+                            </div>
+                            <div className="flex flex-col min-w-0">
+                                <span className="text-[11px] font-bold uppercase tracking-tight text-gray-400 truncate mb-0.5">{card.title}</span>
+                                <span className="text-xl font-bold text-gray-900 leading-none">{card.value}</span>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
-            <div className="flex flex-col gap-6">
-                <div className="flex items-center justify-between">
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Leads Overview</h2>
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Lead Origin Breakdown */}
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4">
+                    <h3 className="font-bold text-gray-900 border-b border-gray-50 pb-4">Lead Origin Breakdown</h3>
+                    <div className="grid grid-cols-2 gap-4">
+                        {Object.entries(originBreakdown).sort((a, b) => b[1] - a[1]).map(([origin, count]) => (
+                            <div key={origin} className="flex flex-col p-3 rounded-xl bg-gray-50 border border-gray-100">
+                                <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{origin}</span>
+                                <span className="text-xl font-bold text-indigo-600">{count}</span>
+                            </div>
+                        ))}
+                        {Object.keys(originBreakdown).length === 0 && <span className="text-xs text-gray-400 italic">No origin data available</span>}
+                    </div>
                 </div>
-                <LeadList filterType="all" />
+
+                {/* Status Breakdown */}
+                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4">
+                    <h3 className="font-bold text-gray-900 border-b border-gray-50 pb-4">Status Breakdown</h3>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                        {['new', 'contacted', 'followed_up', 'closed', 'lost'].map((status) => {
+                            const count = statusBreakdown[status] || 0;
+                            return (
+                                <div key={status} className="flex flex-col p-3 rounded-xl bg-gray-50 border border-gray-100">
+                                    <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{status.replace('_', ' ')}</span>
+                                    <span className="text-xl font-bold text-gray-900">{count}</span>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            </div>
+
+            {/* Users Section */}
+            <div className="flex flex-col gap-6">
+                <div className="flex items-center justify-between border-b border-gray-100 pb-4">
+                    <h2 className="text-xl font-bold text-gray-900">Users</h2>
+                    <div className="flex gap-4">
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-lg border border-indigo-100">
+                            <span className="text-[10px] font-bold uppercase text-indigo-400">Total Users</span>
+                            <span className="text-sm font-bold text-indigo-700">{users.length}</span>
+                        </div>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg border border-orange-100">
+                            <span className="text-[10px] font-bold uppercase text-orange-400">Unassigned Leads</span>
+                            <span className="text-sm font-bold text-orange-700">{unassignedLeads}</span>
+                        </div>
+                    </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                    {userPerformance.map(user => (
+                        <div key={user._id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all hover:border-indigo-100 hover:shadow-md">
+                            <div className="bg-gray-50/50 p-4 border-b border-gray-100 flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                                    {user.username.charAt(0)}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-gray-900">{user.username}</span>
+                                    <span className="text-xs text-gray-500 capitalize">{user.role}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 divide-x divide-gray-100">
+                                <div className="p-4 flex flex-col items-center gap-1">
+                                    <span className="text-[9px] font-bold uppercase tracking-tighter text-gray-400">Assigned</span>
+                                    <span className="text-lg font-bold text-indigo-600">{user.totalAssigned}</span>
+                                </div>
+                                <div className="p-4 flex flex-col items-center gap-1">
+                                    <span className="text-[9px] font-bold uppercase tracking-tighter text-gray-400">Today</span>
+                                    <span className="text-lg font-bold text-emerald-600">{user.todayFollowups}</span>
+                                </div>
+                                <div className="p-4 flex flex-col items-center gap-1">
+                                    <span className="text-[9px] font-bold uppercase tracking-tighter text-gray-400">Missed</span>
+                                    <span className="text-lg font-bold text-red-600">{user.missedFollowups}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {userPerformance.length === 0 && (
+                        <div className="col-span-full py-12 text-center bg-gray-50/50 rounded-2xl border border-dashed border-gray-200">
+                            <span className="text-gray-400 font-medium">No team members found</span>
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

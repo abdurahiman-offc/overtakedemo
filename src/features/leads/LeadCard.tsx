@@ -20,15 +20,16 @@ export function LeadCard({ lead, onClick, onStatusChange }: LeadCardProps) {
             onClick={() => onClick(lead)}
             className="group relative flex cursor-pointer flex-col gap-4 rounded-xl border border-gray-100 bg-white p-5 shadow-sm transition-all duration-300 hover:-translate-y-1 hover:border-indigo-100 hover:shadow-lg hover:shadow-indigo-500/10"
         >
-            <div className="flex items-start justify-between">
-                <div className="flex flex-col gap-2">
-                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors">{lead.name}</h3>
-                    <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2">
+                <div className="flex items-start justify-between gap-2 w-full">
+                    <h3 className="text-lg font-bold text-gray-900 group-hover:text-indigo-600 transition-colors truncate flex-1" title={lead.name}>{lead.name}</h3>
+                    <div className="flex items-center gap-2 shrink-0">
+                        <span className="text-[10px] font-bold text-indigo-500 bg-indigo-50 px-2 py-1 rounded-md border border-indigo-100 uppercase tracking-wider">{lead.leadOrigin}</span>
                         <div className={clsx(
-                            "max-w-fit rounded-full px-3 py-1 text-xs font-bold uppercase tracking-wider text-white shadow-md",
+                            "rounded-md px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-white shadow-sm",
                             typeConfig[lead.leadType]
                         )}>
-                            {lead.leadType.toUpperCase()}
+                            {lead.leadType}
                         </div>
                     </div>
                 </div>
@@ -43,10 +44,12 @@ export function LeadCard({ lead, onClick, onStatusChange }: LeadCardProps) {
                     <MapPin size={16} className="text-gray-400" />
                     <span>{lead.place || "No location"}</span>
                 </div>
-                <div className="flex items-center gap-3">
-                    <MessageSquare size={16} className="text-gray-400" />
-                    <span>{lead.enquiredVehicle || "No vehicle"}</span>
-                </div>
+                {lead.carDetails && lead.carDetails.length > 0 && (
+                    <div className="flex items-center gap-3">
+                        <MessageSquare size={16} className="text-gray-400" />
+                        <span className="truncate">{lead.carDetails.map(c => `${c.brandName} ${c.modelName}`).join(', ')}</span>
+                    </div>
+                )}
             </div>
 
             {lead.tags && lead.tags.length > 0 && (
@@ -65,7 +68,7 @@ export function LeadCard({ lead, onClick, onStatusChange }: LeadCardProps) {
                 <span className="text-xs font-semibold text-gray-400 uppercase">Status</span>
                 <select
                     value={lead.status}
-                    onChange={(e) => onStatusChange(lead.id, e.target.value as Lead['status'])}
+                    onChange={(e) => onStatusChange(lead._id, e.target.value as Lead['status'])}
                     className="rounded-lg border-0 bg-gray-50 py-1.5 pl-3 pr-8 text-xs font-medium text-gray-700 ring-1 ring-inset ring-gray-300 focus:ring-2 focus:ring-indigo-600 sm:text-sm sm:leading-6"
                 >
                     <option value="new">New</option>

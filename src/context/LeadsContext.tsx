@@ -1,104 +1,217 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Lead, SmartList } from '../types';
+import { Lead, SmartList, User, Tag } from '../types';
 
 interface LeadsContextType {
     leads: Lead[];
-    addLead: (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'followupCount'>) => void;
-    updateLead: (id: string, updates: Partial<Lead>) => void;
-    deleteLead: (id: string) => void;
+    users: User[];
     smartLists: SmartList[];
-    addSmartList: (list: Omit<SmartList, 'id'>) => void;
-    deleteSmartList: (id: string) => void;
+    tags: Tag[];
+    loading: boolean;
+    error: string | null;
+    fetchLeads: () => Promise<void>;
+    addLead: (lead: Partial<Lead>) => Promise<void>;
+    updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
+    deleteLead: (id: string) => Promise<void>;
+    addUser: (user: Partial<User>) => Promise<void>;
+    addSmartList: (list: Partial<SmartList>) => Promise<void>;
+    deleteSmartList: (id: string) => Promise<void>;
+    addTag: (tag: Partial<Tag>) => Promise<void>;
+    deleteTag: (id: string) => Promise<void>;
+    bulkDeleteLeads: (ids: string[]) => Promise<void>;
+    bulkAssignLeads: (ids: string[], userId: string) => Promise<void>;
+    bulkUpdateLeads: (ids: string[], updates?: Partial<Lead>, addTags?: string[], removeTags?: string[]) => Promise<void>;
 }
 
 const LeadsContext = createContext<LeadsContextType | undefined>(undefined);
 
 export function LeadsProvider({ children }: { children: React.ReactNode }) {
-    const [leads, setLeads] = useState<Lead[]>(() => {
-        const saved = localStorage.getItem('crm_leads');
-        if (saved) return JSON.parse(saved);
-        return [
-            {
-                id: '1',
-                name: 'John Smith',
-                phone: '1234567890',
-                place: 'New York',
-                enquiredVehicle: 'Tesla Model 3',
-                leadType: 'hot',
-                status: 'new',
-                notes: 'Interested in test drive next week.',
-                tags: ['priority', 'EV'],
-                followupDate: new Date().toISOString().split('T')[0],
-                followupNote: 'Call to confirm appointment',
-                followupCount: 0,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-            },
-            {
-                id: '2',
-                name: 'Jane Smith',
-                phone: '9876543210',
-                place: 'California',
-                enquiredVehicle: 'Ford Mustang',
-                leadType: 'warm',
-                status: 'contacted',
-                notes: 'Waiting for finance approval.',
-                tags: ['finance-pending'],
-                followupDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
-                followupNote: '',
-                followupCount: 1,
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
+    const [leads, setLeads] = useState<Lead[]>([]);
+    const [users, setUsers] = useState<User[]>([]);
+    const [smartLists, setSmartLists] = useState<SmartList[]>([]);
+    const [tags, setTags] = useState<Tag[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+
+    const fetchData = async () => {
+        try {
+            setLoading(true);
+            const [leadsRes, usersRes, listsRes, tagsRes] = await Promise.all([
+                fetch('/api/leads'),
+                fetch('/api/users'),
+                fetch('/api/smartlists'),
+                fetch('/api/tags')
+            ]);
+
+            if (leadsRes.ok) {
+                const fetchedLeads = await leadsRes.json();
+                setLeads(fetchedLeads.map((l: Record<string, unknown>) => ({
+                    ...l,
+                    tags: l.tags || [],
+                    carDetails: l.carDetails || [],
+                    username: l.username || 'Unknown',
+                    phone: l.phone || 'Unknown',
+                    assignmentHistory: l.assignmentHistory || []
+                } as unknown as Lead)));
             }
-        ];
-    });
-
-    const [smartLists, setSmartLists] = useState<SmartList[]>(() => {
-        const saved = localStorage.getItem('crm_smartLists');
-        return saved ? JSON.parse(saved) : [];
-    });
+            if (usersRes.ok) {
+                const fetchedUsers = await usersRes.json();
+                setUsers(fetchedUsers.map((u: Record<string, unknown>) => ({
+                    ...u,
+                    username: u.username || u.name || 'User'
+                } as User)));
+            }
+            if (listsRes.ok) setSmartLists(await listsRes.json());
+            if (tagsRes.ok) setTags(await tagsRes.json());
+            setError(null);
+        } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : 'An unknown error occurred';
+            console.error('Failed to fetch data', message);
+            setError(message);
+        } finally {
+            setLoading(false);
+        }
+    };
 
     useEffect(() => {
-        localStorage.setItem('crm_leads', JSON.stringify(leads));
-    }, [leads]);
+        fetchData();
+    }, []);
 
-    useEffect(() => {
-        localStorage.setItem('crm_smartLists', JSON.stringify(smartLists));
-    }, [smartLists]);
-
-    const addLead = (lead: Omit<Lead, 'id' | 'createdAt' | 'updatedAt' | 'followupCount'>) => {
-        const newLead: Lead = {
-            ...lead,
-            id: crypto.randomUUID(),
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            followupCount: 0,
-            tags: lead.tags || [],
-        };
-        setLeads((prev) => [newLead, ...prev]);
+    const addLead = async (leadData: Partial<Lead>) => {
+        try {
+            const res = await fetch('/api/leads', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(leadData)
+            });
+            if (res.ok) {
+                await fetchData(); // Refresh to get populated refs
+            }
+        } catch (err) { console.error('Error adding lead', err); }
     };
 
-    const updateLead = (id: string, updates: Partial<Lead>) => {
-        setLeads((prev) =>
-            prev.map((lead) => (lead.id === id ? { ...lead, ...updates, updatedAt: new Date().toISOString() } : lead))
-        );
+    const updateLead = async (id: string, updates: Partial<Lead>) => {
+        try {
+            const res = await fetch(`/api/leads/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                await fetchData();
+            }
+        } catch (err) { console.error('Error updating lead', err); }
     };
 
-    const deleteLead = (id: string) => {
-        setLeads((prev) => prev.filter((lead) => lead.id !== id));
+    const deleteLead = async (id: string) => {
+        try {
+            const res = await fetch(`/api/leads/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setLeads(prev => prev.filter(l => l._id !== id));
+            }
+        } catch (err) { console.error('Error deleting lead', err); }
     };
 
-    const addSmartList = (list: Omit<SmartList, 'id'>) => {
-        const newList: SmartList = { ...list, id: crypto.randomUUID() };
-        setSmartLists((prev) => [...prev, newList]);
+    const addUser = async (userData: Partial<User>) => {
+        try {
+            const res = await fetch('/api/users', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(userData)
+            });
+            if (res.ok) {
+                const newUser = await res.json();
+                setUsers(prev => [newUser, ...prev]);
+            }
+        } catch (err) { console.error('Error adding user', err); }
     };
 
-    const deleteSmartList = (id: string) => {
-        setSmartLists((prev) => prev.filter((list) => list.id !== id));
+    const addSmartList = async (listData: Partial<SmartList>) => {
+        try {
+            const res = await fetch('/api/smartlists', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(listData)
+            });
+            if (res.ok) {
+                const newList = await res.json();
+                setSmartLists(prev => [newList, ...prev]);
+            }
+        } catch (err) { console.error('Error adding list', err); }
+    };
+
+    const deleteSmartList = async (id: string) => {
+        try {
+            const res = await fetch(`/api/smartlists/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setSmartLists(prev => prev.filter(l => l._id !== id));
+            }
+        } catch (err) { console.error('Error deleting list', err); }
+    };
+
+    const addTag = async (tagData: Partial<Tag>) => {
+        try {
+            const res = await fetch('/api/tags', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(tagData)
+            });
+            if (res.ok) {
+                const newTag = await res.json();
+                setTags(prev => [newTag, ...prev]);
+            }
+        } catch (err) { console.error('Error adding tag', err); }
+    };
+
+    const deleteTag = async (id: string) => {
+        try {
+            const res = await fetch(`/api/tags/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setTags(prev => prev.filter(t => t._id !== id));
+            }
+        } catch (err) { console.error('Error deleting tag', err); }
+    };
+
+    const bulkDeleteLeads = async (ids: string[]) => {
+        try {
+            const res = await fetch('/api/leads/bulk-delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids })
+            });
+            if (res.ok) await fetchData();
+        } catch (err) { console.error('Error bulk deleting leads', err); }
+    };
+
+    const bulkAssignLeads = async (ids: string[], userId: string) => {
+        try {
+            const res = await fetch('/api/leads/bulk-assign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, userId })
+            });
+            if (res.ok) await fetchData();
+        } catch (err) { console.error('Error bulk assigning leads', err); }
+    };
+
+    const bulkUpdateLeads = async (ids: string[], updates?: Partial<Lead>, addTags?: string[], removeTags?: string[]) => {
+        try {
+            const res = await fetch('/api/leads/bulk-update', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ ids, updates, addTags, removeTags })
+            });
+            if (res.ok) await fetchData();
+        } catch (err) { console.error('Error bulk updating leads', err); }
     };
 
     return (
-        <LeadsContext.Provider value={{ leads, addLead, updateLead, deleteLead, smartLists, addSmartList, deleteSmartList }}>
+        <LeadsContext.Provider value={{
+            leads, users, smartLists, tags, loading, error,
+            fetchLeads: fetchData, addLead, updateLead, deleteLead,
+            addUser, addSmartList, deleteSmartList,
+            addTag, deleteTag,
+            bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads
+        }}>
             {children}
         </LeadsContext.Provider>
     );

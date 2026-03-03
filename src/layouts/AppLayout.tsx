@@ -1,18 +1,15 @@
 import { useState } from 'react';
 import { Menu, Search, Bell, Plus } from 'lucide-react';
 import { Sidebar } from '../components/Sidebar';
-import { SmartList } from '../types';
 
 interface AppLayoutProps {
     children: React.ReactNode;
     activeTab: string;
     setActiveTab: (tab: string) => void;
     onAddLead: () => void;
-    onSmartListSelect: (list: SmartList) => void;
-    activeSmartListId?: string;
 }
 
-export function AppLayout({ children, activeTab, setActiveTab, onAddLead, onSmartListSelect, activeSmartListId }: AppLayoutProps) {
+export function AppLayout({ children, activeTab, setActiveTab, onAddLead }: AppLayoutProps) {
     const [isSidebarOpen, setSidebarOpen] = useState(false);
 
     const handleTabChange = (tab: string) => {
@@ -20,10 +17,6 @@ export function AppLayout({ children, activeTab, setActiveTab, onAddLead, onSmar
         setSidebarOpen(false);
     };
 
-    const handleSmartListSelect = (list: SmartList) => {
-        onSmartListSelect(list);
-        setSidebarOpen(false);
-    };
 
     return (
         <div className="flex min-h-screen relative bg-gray-50">
@@ -31,9 +24,6 @@ export function AppLayout({ children, activeTab, setActiveTab, onAddLead, onSmar
                 activeTab={activeTab}
                 setActiveTab={handleTabChange}
                 isOpen={isSidebarOpen}
-                activeSmartListId={activeSmartListId}
-                onSmartListSelect={handleSmartListSelect}
-                onAddLead={onAddLead}
             />
 
             {isSidebarOpen && (
@@ -54,8 +44,10 @@ export function AppLayout({ children, activeTab, setActiveTab, onAddLead, onSmar
                         </button>
                         <h1 className="text-xl font-bold text-gray-900 sm:text-2xl">
                             {activeTab === 'dashboard' ? 'Dashboard' :
-                                activeTab === 'followups' ? 'Today\'s Follow Ups' :
-                                    activeTab === 'smartlist' ? 'Smart List' : 'Settings'}
+                                activeTab === 'contacts' ? 'Contacts' :
+                                    activeTab === 'pipeline' ? 'Pipeline' :
+                                        activeTab === 'followups' ? 'Follow Ups' :
+                                            activeTab === 'report' ? 'Working Report' : 'CRM'}
                         </h1>
                     </div>
 

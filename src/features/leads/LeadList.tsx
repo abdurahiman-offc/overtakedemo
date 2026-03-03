@@ -1,265 +1,555 @@
 import { useState, useMemo } from 'react';
 import { useLeads } from '../../context/LeadsContext';
-import { LeadCard } from './LeadCard';
-import { LeadDetailsModal } from './LeadDetailsModal';
+import { LeadPage } from './LeadPage';
 import { LeadFormModal } from './LeadFormModal';
-import { Search, Filter, CalendarCheck, Bookmark, X } from 'lucide-react';
-import { isSameDay, parseISO } from 'date-fns';
+import { Search, Filter, Bookmark, X, MoreHorizontal, Trash2, UserPlus, CheckCircle2 } from 'lucide-react';
+import { isSameDay, parseISO, format } from 'date-fns';
 import { Lead, LeadFilter } from '../../types';
+import { TagInput } from '../../components/TagInput';
 
 interface LeadListProps {
-    filterType: 'all' | 'followup' | 'smartlist';
-    smartListFilter?: LeadFilter;
+    initialFilter?: 'all' | 'followup';
 }
 
-export function LeadList({ filterType, smartListFilter }: LeadListProps) {
-    const { leads, updateLead, addSmartList } = useLeads();
+export function LeadList({ initialFilter = 'all' }: LeadListProps) {
+    const { leads, addSmartList, users, bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads, smartLists, deleteSmartList } = useLeads();
+
+    const [currentMode, setCurrentMode] = useState<'all' | 'followup' | 'smartlist'>(initialFilter);
+    const [activeSmartListId, setActiveSmartListId] = useState<string | null>(null);
+
+    // Selection state
+    const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+    // Filter states
     const [searchTerm, setSearchTerm] = useState('');
     const [nameFilter, setNameFilter] = useState('');
     const [phoneFilter, setPhoneFilter] = useState('');
-    const [placeFilter, setPlaceFilter] = useState('');
-    const [tagFilter, setTagFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('all');
     const [leadTypeFilter, setLeadTypeFilter] = useState('all');
+    const [leadOriginFilter, setLeadOriginFilter] = useState('all');
+    const [placeFilter, setPlaceFilter] = useState('');
+    const [tagFilter, setTagFilter] = useState('');
     const [dateFilter, setDateFilter] = useState('');
+    const [assignedToFilter, setAssignedToFilter] = useState('all');
 
     const [isSmartListModalOpen, setIsSmartListModalOpen] = useState(false);
     const [smartListName, setSmartListName] = useState('');
-
     const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
     const [editingLead, setEditingLead] = useState<Lead | null>(null);
-
     const [showAdvancedFilters, setShowAdvancedFilters] = useState(false);
+    const [showBulkAssignPanel, setShowBulkAssignPanel] = useState(false);
+    const [showBulkUpdatePanel, setShowBulkUpdatePanel] = useState(false);
+    const [bulkUpdateType, setBulkUpdateType] = useState<'status' | 'type' | 'tags' | 'date' | null>(null);
+    const [bulkTagUpdateType, setBulkTagUpdateType] = useState<'add' | 'remove'>('add');
+    const [bulkTags, setBulkTags] = useState<string[]>([]);
+
+    // Get unique tags from all leads for suggestions
+    const availableTags = useMemo(() => {
+        const tags = new Set<string>();
+        leads.forEach(l => l.tags?.forEach(t => tags.add(t)));
+        return Array.from(tags);
+    }, [leads]);
 
     // Apply filters
     const filteredLeads = useMemo(() => {
+        const activeSmartList = smartLists.find(l => l._id === activeSmartListId);
+        const smartListFilter = activeSmartList?.filters;
+
         return leads.filter(lead => {
-            // 1. Search Logic (Global)
             if (searchTerm) {
-                const matchesGlobal =
-                    lead.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    lead.phone.includes(searchTerm) ||
-                    lead.enquiredVehicle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    lead.place.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                    lead.tags.some(t => t.toLowerCase().includes(searchTerm.toLowerCase()));
-                if (!matchesGlobal) return false;
+                const searchLower = searchTerm.toLowerCase();
+                return (
+                    lead.name.toLowerCase().includes(searchLower) ||
+                    lead.phone.includes(searchLower) ||
+                    lead.place?.toLowerCase().includes(searchLower) ||
+                    lead.tags.some(t => t.toLowerCase().includes(searchLower)) ||
+                    lead.carDetails?.some(c => `${c.brandName} ${c.modelName}`.toLowerCase().includes(searchLower))
+                );
             }
 
-            // 2. Tab Logic (Follow-up vs All)
-            if (filterType === 'followup') {
+            if (currentMode === 'followup') {
                 const today = new Date();
-                const leadDate = parseISO(lead.followupDate);
+                const leadDate = parseISO(lead.followupDate as string);
                 if (!isSameDay(today, leadDate)) return false;
             }
 
-            // 3. Smart List Filters (if in smartlist mode)
-            if (filterType === 'smartlist' && smartListFilter) {
+            if (currentMode === 'smartlist' && smartListFilter) {
                 if (smartListFilter.name && !lead.name.toLowerCase().includes(smartListFilter.name.toLowerCase())) return false;
                 if (smartListFilter.phone && !lead.phone.includes(smartListFilter.phone)) return false;
                 if (smartListFilter.place && !lead.place.toLowerCase().includes(smartListFilter.place.toLowerCase())) return false;
                 if (smartListFilter.tag && !lead.tags.some(t => t.toLowerCase().includes(smartListFilter.tag!.toLowerCase()))) return false;
                 if (smartListFilter.status && smartListFilter.status !== 'all' && lead.status !== smartListFilter.status) return false;
                 if (smartListFilter.leadType && smartListFilter.leadType !== 'all' && lead.leadType !== smartListFilter.leadType) return false;
+                if (smartListFilter.leadOrigin && smartListFilter.leadOrigin !== 'all' && lead.leadOrigin !== smartListFilter.leadOrigin) return false;
+                if (smartListFilter.assignedTo && smartListFilter.assignedTo !== 'all' && lead.assignedTo?._id !== smartListFilter.assignedTo) return false;
+                if (smartListFilter.selectedIds && smartListFilter.selectedIds.length > 0 && !smartListFilter.selectedIds.includes(lead._id)) return false;
             }
 
-            // 4. Manual Advanced Filters
             if (nameFilter && !lead.name.toLowerCase().includes(nameFilter.toLowerCase())) return false;
             if (phoneFilter && !lead.phone.includes(phoneFilter)) return false;
             if (placeFilter && !lead.place.toLowerCase().includes(placeFilter.toLowerCase())) return false;
             if (tagFilter && !lead.tags.some(t => t.toLowerCase().includes(tagFilter.toLowerCase()))) return false;
-
-            // 5. Date Filter (Custom date selector)
-            if (dateFilter && filterType === 'all') {
-                if (lead.followupDate !== dateFilter) return false;
-            }
-
-            // 6. Status Filter
+            if (leadOriginFilter !== 'all' && lead.leadOrigin !== leadOriginFilter) return false;
+            if (assignedToFilter !== 'all' && lead.assignedTo?._id !== assignedToFilter) return false;
+            if (dateFilter && currentMode === 'all' && lead.followupDate?.split('T')[0] !== dateFilter) return false;
             if (statusFilter !== 'all' && lead.status !== statusFilter) return false;
-
-            // 7. Lead Type Filter
             if (leadTypeFilter !== 'all' && lead.leadType !== leadTypeFilter) return false;
 
             return true;
         });
-    }, [leads, filterType, smartListFilter, searchTerm, nameFilter, phoneFilter, placeFilter, tagFilter, dateFilter, statusFilter, leadTypeFilter]);
+    }, [leads, currentMode, activeSmartListId, smartLists, searchTerm, nameFilter, phoneFilter, placeFilter, tagFilter, dateFilter, statusFilter, leadTypeFilter, leadOriginFilter, assignedToFilter]);
 
-    const handleEditLead = (lead: Lead) => {
-        setSelectedLead(null);
-        setEditingLead(lead);
+    const handleSelectAll = (checked: boolean) => {
+        if (checked) {
+            setSelectedIds(filteredLeads.map(l => l._id!));
+        } else {
+            setSelectedIds([]);
+        }
+    };
+
+    const handleSelectLead = (id: string, checked: boolean) => {
+        if (checked) {
+            setSelectedIds(prev => [...prev, id]);
+        } else {
+            setSelectedIds(prev => prev.filter(i => i !== id));
+        }
+    };
+
+    const handleBulkDelete = async () => {
+        if (window.confirm(`Are you sure you want to delete ${selectedIds.length} contacts?`)) {
+            await bulkDeleteLeads(selectedIds);
+            setSelectedIds([]);
+        }
+    };
+
+    const handleBulkAssign = async (userId: string) => {
+        await bulkAssignLeads(selectedIds, userId);
+        setSelectedIds([]);
+        setShowBulkAssignPanel(false);
     };
 
     const handleSaveSmartList = () => {
         if (!smartListName) return;
-
-        const filters: LeadFilter = {
-            name: nameFilter,
-            phone: phoneFilter,
-            place: placeFilter,
-            tag: tagFilter,
-            status: statusFilter,
-            leadType: leadTypeFilter as any,
-        };
-
         addSmartList({
             name: smartListName,
-            filters
+            filters: {
+                name: nameFilter, phone: phoneFilter, place: placeFilter,
+                tag: tagFilter, status: statusFilter,
+                leadType: leadTypeFilter as LeadFilter['leadType'],
+                leadOrigin: leadOriginFilter as LeadFilter['leadOrigin'],
+                assignedTo: assignedToFilter,
+                selectedIds: selectedIds.length > 0 ? selectedIds : undefined
+            }
         });
-
         setIsSmartListModalOpen(false);
         setSmartListName('');
     };
 
-    const hasActiveFilters = searchTerm || nameFilter || phoneFilter || placeFilter || tagFilter || statusFilter !== 'all' || leadTypeFilter !== 'all' || dateFilter;
+    const hasActiveFilters = searchTerm || nameFilter || phoneFilter || placeFilter || tagFilter || dateFilter || statusFilter !== 'all' || leadTypeFilter !== 'all' || leadOriginFilter !== 'all' || assignedToFilter !== 'all';
+
+    if (selectedLead) {
+        return (
+            <div className="w-full flex-1 animate-fadeIn">
+                <LeadPage
+                    lead={selectedLead}
+                    onBack={() => setSelectedLead(null)}
+                    onEdit={(l) => { setSelectedLead(null); setEditingLead(l); }}
+                />
+            </div>
+        );
+    }
+
+    if (editingLead) {
+        return (
+            <div className="w-full flex-1 animate-fadeIn">
+                <LeadFormModal
+                    initialData={editingLead}
+                    onClose={() => setEditingLead(null)}
+                    inline={true}
+                />
+            </div>
+        );
+    }
 
     return (
-        <div className="flex w-full flex-col gap-6">
-            <div className="flex flex-wrap items-center gap-4">
-                <div className="relative flex-1 min-w-[300px]">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={20} />
-                    <input
-                        type="text"
-                        placeholder="Search leads, tags, or place..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full rounded-xl border border-gray-200 bg-white py-3 pl-10 pr-4 text-sm shadow-sm transition-all focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                    />
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <button
-                        onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                        className={`flex items-center gap-2 rounded-xl border px-4 py-2.5 text-sm font-semibold transition-all ${showAdvancedFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-600'}`}
-                    >
-                        <Filter size={18} />
-                        Filters
-                    </button>
-
-                    {hasActiveFilters && (
+        <div className="flex w-full flex-col bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+            {/* GHL Header Tabs */}
+            <div className="flex items-center gap-1 border-b border-gray-100 px-4 pt-4 bg-gray-50/50 overflow-x-auto no-scrollbar">
+                <button
+                    onClick={() => { setCurrentMode('all'); setActiveSmartListId(null); }}
+                    className={`px-4 py-2 text-sm font-bold whitespace-nowrap rounded-t-lg transition-all ${currentMode === 'all' ? 'bg-white border-x border-t border-gray-100 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
+                >
+                    All Contacts
+                </button>
+                {smartLists.map(list => (
+                    <div key={list._id} className="relative group">
                         <button
-                            onClick={() => setIsSmartListModalOpen(true)}
-                            className="flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-indigo-700 transition-all"
+                            onClick={() => { setCurrentMode('smartlist'); setActiveSmartListId(list._id!); }}
+                            className={`px-4 py-2 text-sm font-bold whitespace-nowrap rounded-t-lg transition-all flex items-center gap-2 ${currentMode === 'smartlist' && activeSmartListId === list._id ? 'bg-white border-x border-t border-gray-100 text-indigo-600' : 'text-gray-500 hover:text-gray-700'}`}
                         >
-                            <Bookmark size={16} />
-                            Save as Smart List
+                            {list.name}
                         </button>
-                    )}
-                </div>
+                        <button
+                            onClick={(e) => { e.stopPropagation(); if (list._id && window.confirm('Delete this smart list?')) deleteSmartList(list._id); }}
+                            className="absolute -top-1 -right-1 hidden group-hover:flex h-4 w-4 bg-red-500 text-white rounded-full items-center justify-center text-[10px]"
+                        >
+                            <X size={10} />
+                        </button>
+                    </div>
+                ))}
             </div>
 
-            {showAdvancedFilters && (
-                <div className="grid grid-cols-1 gap-4 rounded-2xl border border-gray-100 bg-white p-6 shadow-sm sm:grid-cols-2 lg:grid-cols-4 animate-fadeIn">
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase text-gray-400">Filter by Name</label>
-                        <input
-                            value={nameFilter}
-                            onChange={(e) => setNameFilter(e.target.value)}
-                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
-                            placeholder="Search name..."
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase text-gray-400">Filter by Phone</label>
-                        <input
-                            value={phoneFilter}
-                            onChange={(e) => setPhoneFilter(e.target.value)}
-                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
-                            placeholder="Search phone..."
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase text-gray-400">Filter by Place</label>
-                        <input
-                            value={placeFilter}
-                            onChange={(e) => setPlaceFilter(e.target.value)}
-                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
-                            placeholder="Search place..."
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase text-gray-400">Filter by Tag</label>
-                        <input
-                            value={tagFilter}
-                            onChange={(e) => setTagFilter(e.target.value)}
-                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
-                            placeholder="Search tags..."
-                        />
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase text-gray-400">Status</label>
-                        <select
-                            value={statusFilter}
-                            onChange={(e) => setStatusFilter(e.target.value)}
-                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
+            {/* Action Bar */}
+            <div className="flex flex-col gap-4 p-4 border-b border-gray-100 bg-white">
+                <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-bold text-gray-500">
+                        Total Contacts: <span className="text-indigo-600">{filteredLeads.length}</span>
+                        {selectedIds.length > 0 && <span className="ml-2 px-2 py-0.5 rounded bg-indigo-100 text-indigo-700 text-xs">{selectedIds.length} Selected</span>}
+                    </span>
+                </div>
+                <div className="flex items-center justify-between gap-4">
+                    <div className="flex items-center gap-2 flex-1 max-w-lg">
+                        <div className="relative w-full">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                            <input
+                                type="text"
+                                placeholder="Quick search..."
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 pl-9 pr-4 text-sm focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                            />
+                        </div>
+                        <button
+                            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                            className={`p-2 rounded-lg border transition-all ${showAdvancedFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
                         >
-                            <option value="all">All Statuses</option>
+                            <Filter size={20} />
+                        </button>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                        {selectedIds.length > 0 && (
+                            <button
+                                onClick={() => setIsSmartListModalOpen(true)}
+                                className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-all border border-indigo-100 mr-2"
+                            >
+                                <Bookmark size={16} /> Save Selection
+                            </button>
+                        )}
+                        {selectedIds.length > 0 ? (
+                            <div className="flex items-center gap-2 animate-fadeIn">
+                                {/* ... existing buttons ... */}
+                                <button
+                                    onClick={() => { setShowBulkAssignPanel(!showBulkAssignPanel); setShowBulkUpdatePanel(false); }}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${showBulkAssignPanel ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                                >
+                                    <UserPlus size={16} /> Assign
+                                </button>
+                                <button
+                                    onClick={() => { setShowBulkUpdatePanel(!showBulkUpdatePanel); setShowBulkAssignPanel(false); setBulkUpdateType(null); }}
+                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${showBulkUpdatePanel ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
+                                >
+                                    <MoreHorizontal size={16} /> Update
+                                </button>
+                                <button
+                                    onClick={handleBulkDelete}
+                                    className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-100 transition-all"
+                                >
+                                    <Trash2 size={16} /> Delete
+                                </button>
+                            </div>
+                        ) : (
+                            hasActiveFilters && (
+                                <button
+                                    onClick={() => setIsSmartListModalOpen(true)}
+                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-700 transition-all"
+                                >
+                                    <Bookmark size={16} /> Save Smart List
+                                </button>
+                            )
+                        )}
+                    </div>
+                </div>
+
+                {showBulkAssignPanel && (
+                    <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100 animate-slideDown">
+                        <span className="text-sm font-bold text-indigo-700">Assign selection to:</span>
+                        <div className="flex flex-wrap gap-2">
+                            {users.map(user => (
+                                <button
+                                    key={user._id}
+                                    onClick={() => handleBulkAssign(user._id!)}
+                                    className="px-3 py-1 bg-white border border-indigo-200 rounded-full text-xs font-bold text-indigo-600 hover:bg-indigo-600 hover:text-white transition-all shadow-sm"
+                                >
+                                    {user.username}
+                                </button>
+                            ))}
+                        </div>
+                        <button onClick={() => setShowBulkAssignPanel(false)} className="ml-auto text-indigo-400 hover:text-indigo-600"><X size={18} /></button>
+                    </div>
+                )}
+
+                {showBulkUpdatePanel && (
+                    <div className="flex flex-col gap-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100 animate-slideDown">
+                        <div className="flex items-center gap-4">
+                            <span className="text-sm font-bold text-indigo-700 whitespace-nowrap">Bulk Update:</span>
+                            <div className="flex gap-2">
+                                <button onClick={() => setBulkUpdateType('status')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'status' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Status</button>
+                                <button onClick={() => setBulkUpdateType('type')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'type' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Lead Type</button>
+                                <button onClick={() => setBulkUpdateType('tags')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'tags' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Tags</button>
+                                <button onClick={() => setBulkUpdateType('date')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'date' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Follow-up</button>
+                            </div>
+                            <button onClick={() => setShowBulkUpdatePanel(false)} className="ml-auto text-indigo-400 hover:text-indigo-600"><X size={18} /></button>
+                        </div>
+
+                        {bulkUpdateType === 'status' && (
+                            <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-indigo-100 animate-fadeIn">
+                                {['new', 'contacted', 'followed_up', 'closed', 'lost'].map(s => (
+                                    <button
+                                        key={s}
+                                        onClick={async () => { await bulkUpdateLeads(selectedIds, { status: s as 'new' | 'contacted' | 'followed_up' | 'closed' | 'lost' }); setSelectedIds([]); setShowBulkUpdatePanel(false); }}
+                                        className="px-3 py-1 bg-gray-50 hover:bg-indigo-600 hover:text-white rounded text-xs font-bold capitalize transition-all"
+                                    >
+                                        {s.replace('_', ' ')}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {bulkUpdateType === 'type' && (
+                            <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-indigo-100 animate-fadeIn">
+                                {['hot', 'warm', 'cold'].map(t => (
+                                    <button
+                                        key={t}
+                                        onClick={async () => { await bulkUpdateLeads(selectedIds, { leadType: t as 'hot' | 'warm' | 'cold' }); setSelectedIds([]); setShowBulkUpdatePanel(false); }}
+                                        className="px-3 py-1 bg-gray-50 hover:bg-indigo-600 hover:text-white rounded text-xs font-bold capitalize transition-all"
+                                    >
+                                        {t}
+                                    </button>
+                                ))}
+                            </div>
+                        )}
+
+                        {bulkUpdateType === 'tags' && (
+                            <div className="flex flex-col gap-3 p-3 bg-white rounded-lg border border-indigo-100 animate-fadeIn">
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => setBulkTagUpdateType('add')}
+                                        className={`flex-1 py-1 rounded-md text-xs font-bold border transition-all ${bulkTagUpdateType === 'add' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-500 border-gray-100'}`}
+                                    > Add Tags </button>
+                                    <button
+                                        onClick={() => setBulkTagUpdateType('remove')}
+                                        className={`flex-1 py-1 rounded-md text-xs font-bold border transition-all ${bulkTagUpdateType === 'remove' ? 'bg-red-600 text-white border-red-600' : 'bg-gray-50 text-gray-500 border-gray-100'}`}
+                                    > Remove Tags </button>
+                                </div>
+
+                                <TagInput
+                                    selectedTags={bulkTags}
+                                    onTagsChange={setBulkTags}
+                                    availableTags={availableTags}
+                                    placeholder={bulkTagUpdateType === 'add' ? "Select tags to add..." : "Select tags to remove..."}
+                                />
+
+                                <div className="flex justify-end gap-2 mt-1">
+                                    <button
+                                        onClick={() => { setBulkTags([]); setBulkUpdateType(null); setShowBulkUpdatePanel(false); }}
+                                        className="text-xs font-bold text-gray-400 hover:text-gray-600 px-3 py-1"
+                                    > Cancel </button>
+                                    <button
+                                        disabled={bulkTags.length === 0}
+                                        onClick={async () => {
+                                            if (bulkTagUpdateType === 'add') {
+                                                await bulkUpdateLeads(selectedIds, undefined, bulkTags);
+                                            } else {
+                                                await bulkUpdateLeads(selectedIds, undefined, undefined, bulkTags);
+                                            }
+                                            setBulkTags([]);
+                                            setSelectedIds([]);
+                                            setShowBulkUpdatePanel(false);
+                                        }}
+                                        className={`px-4 py-1.5 rounded-md text-xs font-bold text-white transition-all ${bulkTags.length > 0 ? (bulkTagUpdateType === 'add' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-red-600 hover:bg-red-700') : 'bg-gray-300 cursor-not-allowed'}`}
+                                    >
+                                        {bulkTagUpdateType === 'add' ? 'Add Tags' : 'Remove Tags'}
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+
+                        {bulkUpdateType === 'date' && (
+                            <div className="flex items-center gap-2 p-2 bg-white rounded-lg border border-indigo-100 animate-fadeIn">
+                                <input
+                                    type="date"
+                                    className="flex-1 text-sm border-0 focus:ring-0 p-2 outline-none"
+                                    onChange={async (e) => {
+                                        const date = e.target.value;
+                                        if (date) {
+                                            await bulkUpdateLeads(selectedIds, { followupDate: new Date(date).toISOString() });
+                                            setSelectedIds([]);
+                                            setShowBulkUpdatePanel(false);
+                                        }
+                                    }}
+                                />
+                                <span className="text-[10px] text-gray-400 px-2 italic">Select date to apply</span>
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {showAdvancedFilters && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                        <input value={nameFilter} onChange={e => setNameFilter(e.target.value)} placeholder="By Name" className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
+                        <input value={phoneFilter} onChange={e => setPhoneFilter(e.target.value)} placeholder="By Phone" className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
+                        <input value={placeFilter} onChange={e => setPlaceFilter(e.target.value)} placeholder="By Place" className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
+                        <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
+                            <option value="all">Any Status</option>
                             <option value="new">New</option>
                             <option value="contacted">Contacted</option>
                             <option value="followed_up">Followed</option>
                             <option value="closed">Closed</option>
                             <option value="lost">Lost</option>
                         </select>
-                    </div>
-                    <div className="flex flex-col gap-1.5">
-                        <label className="text-[10px] font-bold uppercase text-gray-400">Lead Type</label>
-                        <select
-                            value={leadTypeFilter}
-                            onChange={(e) => setLeadTypeFilter(e.target.value)}
-                            className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
-                        >
-                            <option value="all">All Types</option>
+                        <select value={leadTypeFilter} onChange={e => setLeadTypeFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
+                            <option value="all">Any Type</option>
                             <option value="hot">Hot</option>
                             <option value="warm">Warm</option>
                             <option value="cold">Cold</option>
                         </select>
-                    </div>
-                    {filterType === 'all' && (
-                        <div className="flex flex-col gap-1.5">
-                            <label className="text-[10px] font-bold uppercase text-gray-400">Follow-up Date</label>
-                            <input
-                                type="date"
-                                value={dateFilter}
-                                onChange={(e) => setDateFilter(e.target.value)}
-                                className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm focus:bg-white focus:ring-2 focus:ring-indigo-100 outline-none"
-                            />
-                        </div>
-                    )}
-                    <div className="flex items-end pt-2">
+                        <select value={leadOriginFilter} onChange={e => setLeadOriginFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
+                            <option value="all">Any Origin</option>
+                            <option value="WhatsApp">WhatsApp</option>
+                            <option value="Insta">Instagram</option>
+                            <option value="FB">Facebook</option>
+                            <option value="Walk-in">Walk-in</option>
+                            <option value="Tele">Tele Caller</option>
+                            <option value="Referral">Referral</option>
+                            <option value="Web">Website</option>
+                            <option value="OLX">OLX</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <select value={assignedToFilter} onChange={e => setAssignedToFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
+                            <option value="unassigned">Unassigned</option>
+                            {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                        </select>
+                        <input value={tagFilter} onChange={e => setTagFilter(e.target.value)} placeholder="By Tag" className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
+                        <input type="date" value={dateFilter} onChange={e => setDateFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
                         <button
                             onClick={() => {
-                                setSearchTerm(''); setNameFilter(''); setPhoneFilter(''); setPlaceFilter(''); setTagFilter(''); setStatusFilter('all'); setLeadTypeFilter('all'); setDateFilter('');
+                                setNameFilter(''); setPhoneFilter(''); setPlaceFilter('');
+                                setTagFilter(''); setDateFilter('');
+                                setStatusFilter('all'); setLeadTypeFilter('all'); setLeadOriginFilter('all');
+                                setAssignedToFilter('all');
                             }}
-                            className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors uppercase tracking-wider"
+                            className="text-xs font-bold text-red-500 uppercase"
                         >
-                            Clear All Filters
+                            Reset
                         </button>
                     </div>
-                </div>
-            )}
+                )}
+            </div>
 
-            {filteredLeads.length === 0 ? (
-                <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-gray-300 bg-gray-50/50 py-16 text-center">
-                    <div className="mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-indigo-50 text-indigo-500">
-                        <CalendarCheck size={32} />
+            {/* Table Layout */}
+            <div className="overflow-x-auto">
+                <table className="w-full text-left border-collapse">
+                    <thead className="bg-gray-50/50 border-b border-gray-100">
+                        <tr>
+                            <th className="p-4 w-10 border-r border-gray-100 text-center">
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.length === filteredLeads.length && filteredLeads.length > 0}
+                                    onChange={e => handleSelectAll(e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Contact Name</th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Phone</th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Type</th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Assigned To</th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</th>
+                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Created</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {filteredLeads.map(lead => (
+                            <tr key={lead._id} className="hover:bg-indigo-50/30 transition-all group">
+                                <td className="p-4">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.includes(lead._id!)}
+                                        onChange={e => handleSelectLead(lead._id!, e.target.checked)}
+                                        className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                    />
+                                </td>
+                                <td className="p-4">
+                                    <div className="flex flex-col">
+                                        <button
+                                            onClick={() => setSelectedLead(lead)}
+                                            className="font-bold text-sm text-gray-900 hover:text-indigo-600 text-left"
+                                        >
+                                            {lead.name}
+                                        </button>
+                                        <span className="text-[10px] text-gray-400">
+                                            {lead.place || 'No location'}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td className="p-4 text-sm text-gray-600">{lead.phone}</td>
+                                <td className="p-4">
+                                    <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${lead.leadType === 'hot' ? 'bg-orange-50 text-orange-600 border border-orange-100' :
+                                        lead.leadType === 'warm' ? 'bg-yellow-50 text-yellow-600 border border-yellow-100' :
+                                            'bg-blue-50 text-blue-600 border border-blue-100'
+                                        }`}>
+                                        {lead.leadType}
+                                    </span>
+                                </td>
+                                <td className="p-4">
+                                    <span className={`px-2 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${lead.status === 'closed' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                        lead.status === 'lost' ? 'bg-red-50 text-red-600 border border-red-100' :
+                                            lead.status === 'followed_up' ? 'bg-indigo-50 text-indigo-600 border border-indigo-100' :
+                                                'bg-gray-100 text-gray-600 border border-gray-200'
+                                        }`}>
+                                        {lead.status.replace('_', ' ')}
+                                    </span>
+                                </td>
+                                <td className="p-4">
+                                    <div className="flex items-center gap-2">
+                                        <div className="h-6 w-6 rounded-full bg-gray-100 flex items-center justify-center text-[10px] font-bold text-gray-500">
+                                            {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username?.charAt(0) : '?'}
+                                        </div>
+                                        <span className="text-xs font-medium text-gray-700">
+                                            {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Unassigned'}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td className="p-4">
+                                    <div className="flex flex-wrap gap-1 max-w-[150px]">
+                                        {lead.tags.length > 0 ? lead.tags.map((tag, i) => (
+                                            <span key={i} className="px-1.5 py-0.5 bg-gray-50 text-gray-500 border border-gray-100 rounded text-[9px] font-medium">
+                                                {tag}
+                                            </span>
+                                        )) : <span className="text-[9px] text-gray-300 italic">No tags</span>}
+                                    </div>
+                                </td>
+                                <td className="p-4 text-[10px] text-gray-500 whitespace-nowrap">
+                                    {lead.createdAt ? format(parseISO(lead.createdAt), 'MMM d, yyyy') : 'N/A'}
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+            </div>
+            {/* Empty State */}
+            {filteredLeads.length === 0 && (
+                <div className="flex flex-col items-center justify-center py-20 bg-gray-50/30">
+                    <div className="h-20 w-20 rounded-full bg-gray-100 flex items-center justify-center text-gray-300 mb-4">
+                        <CheckCircle2 size={40} />
                     </div>
-                    <h3 className="text-lg font-bold text-gray-900">No leads found</h3>
-                    <p className="text-gray-500 max-w-xs mx-auto mt-1">
-                        Try adjusting your filters or search terms.
-                    </p>
-                </div>
-            ) : (
-                <div className="grid grid-cols-1 gap-6 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
-                    {filteredLeads.map(lead => (
-                        <LeadCard
-                            key={lead.id}
-                            lead={lead}
-                            onClick={setSelectedLead}
-                            onStatusChange={(id, status) => updateLead(id, { status })}
-                        />
-                    ))}
+                    <h3 className="text-xl font-bold text-gray-900">No Contacts Found</h3>
+                    <p className="text-gray-500 mt-2">Try adjusting your filters or add a new lead.</p>
                 </div>
             )}
 
-            {/* Smart List Modal */}
+            {/* Modals */}
             {isSmartListModalOpen && (
                 <div className="fixed inset-0 z-[150] flex items-center justify-center bg-black/50 backdrop-blur-[2px] p-4 text-left">
                     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-fadeIn">
@@ -267,42 +557,21 @@ export function LeadList({ filterType, smartListFilter }: LeadListProps) {
                             <h3 className="text-lg font-bold text-gray-900">Save Smart List</h3>
                             <button onClick={() => setIsSmartListModalOpen(false)}><X size={20} className="text-gray-400" /></button>
                         </div>
-                        <p className="text-sm text-gray-500 mb-4">Save the current filters to quickly access them from the sidebar later.</p>
                         <input
                             autoFocus
-                            placeholder="e.g. Hot EV Leads in NY"
+                            placeholder="e.g. Hot Leads"
                             value={smartListName}
                             onChange={(e) => setSmartListName(e.target.value)}
                             className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 outline-none"
                         />
                         <div className="flex justify-end gap-3 mt-6">
                             <button onClick={() => setIsSmartListModalOpen(false)} className="px-4 py-2 font-semibold text-gray-500 hover:text-gray-900">Cancel</button>
-                            <button
-                                onClick={handleSaveSmartList}
-                                className="rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50"
-                                disabled={!smartListName}
-                            >
-                                Save List
-                            </button>
+                            <button onClick={handleSaveSmartList} disabled={!smartListName} className="rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-all active:scale-95">Save List</button>
                         </div>
                     </div>
                 </div>
             )}
 
-            {selectedLead && (
-                <LeadDetailsModal
-                    lead={selectedLead}
-                    onClose={() => setSelectedLead(null)}
-                    onEdit={handleEditLead}
-                />
-            )}
-
-            {editingLead && (
-                <LeadFormModal
-                    initialData={editingLead}
-                    onClose={() => setEditingLead(null)}
-                />
-            )}
         </div>
-    )
+    );
 }

@@ -1,0 +1,150 @@
+import { useState } from 'react';
+import { createPortal } from 'react-dom';
+import { useLeads } from '../../context/LeadsContext';
+import { UserPlus, Mail, Shield, X, Save } from 'lucide-react';
+
+export function UsersView() {
+    const { users, addUser } = useLeads();
+
+    const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+
+    const [userFormData, setUserFormData] = useState({
+        username: '',
+        role: 'sales'
+    });
+
+    const handleUserSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        await addUser({ ...userFormData, role: userFormData.role as 'admin' | 'manager' | 'sales' });
+        setIsUserModalOpen(false);
+        setUserFormData({ username: '', role: 'sales' });
+    };
+
+    return (
+        <div className="flex flex-col gap-8">
+            <div className="flex items-center justify-between">
+                <div className="flex flex-col gap-1">
+                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">User Settings</h2>
+                    <p className="text-sm text-gray-500">Manage team members and roles.</p>
+                </div>
+                <button
+                    onClick={() => setIsUserModalOpen(true)}
+                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+                >
+                    <UserPlus size={18} />
+                    Add User
+                </button>
+            </div>
+
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden z-10">
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 bg-gray-50/50">
+                                <th className="px-6 py-4">User</th>
+                                <th className="px-6 py-4">Role</th>
+                                <th className="px-6 py-4 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {users.map((user) => (
+                                <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold uppercase">
+                                                {user.username?.charAt(0) || 'U'}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-gray-900">{user.username}</span>
+                                                <span className="flex items-center gap-1 text-xs text-gray-500">
+                                                    <Mail size={12} />
+                                                    {user.email}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
+                                            <Shield size={14} className="text-indigo-500" />
+                                            <span className="capitalize">{user.role}</span>
+                                        </div>
+                                    </td>
+                                    <td className="px-6 py-4 text-right">
+                                        <button className="text-sm font-bold text-indigo-600 hover:text-indigo-800">Edit</button>
+                                    </td>
+                                </tr>
+                            ))}
+                            {users.length === 0 && (
+                                <tr>
+                                    <td colSpan={3} className="px-6 py-12 text-center text-sm text-gray-400 italic">
+                                        No users found. Add your first team member!
+                                    </td>
+                                </tr>
+                            )}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* ADD USER MODAL */}
+            {isUserModalOpen && typeof document !== 'undefined' && createPortal(
+                <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-50/70 p-4">
+                    <div className="w-full max-w-md flex flex-col overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-2xl animate-fadeIn">
+                        <div className="flex items-center justify-between border-b border-gray-100/50 px-6 py-5">
+                            <h2 className="text-xl font-bold text-gray-900">Add New User</h2>
+                            <button onClick={() => setIsUserModalOpen(false)} className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900">
+                                <X size={20} />
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleUserSubmit} className="flex flex-col gap-5 p-6">
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-semibold text-gray-700">Username</label>
+                                <input
+                                    required
+                                    value={userFormData.username}
+                                    onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
+                                    className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder-gray-400"
+                                    placeholder="johndoe"
+                                />
+                            </div>
+
+
+
+                            <div className="flex flex-col gap-1.5">
+                                <label className="text-sm font-semibold text-gray-700">Role</label>
+                                <select
+                                    value={userFormData.role}
+                                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
+                                    className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
+                                >
+                                    <option value="admin">Admin</option>
+                                    <option value="manager">Manager</option>
+                                    <option value="sales">Sales</option>
+                                </select>
+                            </div>
+
+                            <div className="mt-4 flex justify-end gap-3 border-t border-gray-100/50 pt-6">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsUserModalOpen(false)}
+                                    className="rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-sm font-bold text-gray-600 hover:bg-gray-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700"
+                                >
+                                    <Save size={18} />
+                                    Save User
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>,
+                document.body
+            )}
+        </div>
+    );
+}

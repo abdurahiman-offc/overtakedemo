@@ -1,24 +1,20 @@
-import { LayoutDashboard, Calendar, Settings, Plus, Bookmark } from 'lucide-react';
+import { LayoutDashboard, Calendar, Settings, Users } from 'lucide-react';
 import { clsx } from 'clsx';
-import { useLeads } from '../context/LeadsContext';
-import { SmartList } from '../types';
 
 interface SidebarProps {
     activeTab: string;
     setActiveTab: (tab: string) => void;
     isOpen: boolean;
-    activeSmartListId?: string;
-    onSmartListSelect: (list: SmartList) => void;
-    onAddLead: () => void;
 }
 
-export function Sidebar({ activeTab, setActiveTab, isOpen, activeSmartListId, onSmartListSelect, onAddLead }: SidebarProps) {
-    const { smartLists } = useLeads();
-
+export function Sidebar({ activeTab, setActiveTab, isOpen }: SidebarProps) {
     const menuItems = [
         { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+        { id: 'contacts', label: 'Contacts', icon: LayoutDashboard }, // Will change icon shortly
+        { id: 'pipeline', label: 'Pipeline', icon: LayoutDashboard },
         { id: 'followups', label: 'Follow-ups', icon: Calendar },
-        { id: 'settings', label: 'Settings', icon: Settings },
+        { id: 'report', label: 'Working Report', icon: Settings },
+        { id: 'users', label: 'Users', icon: Users },
     ];
 
     return (
@@ -51,37 +47,8 @@ export function Sidebar({ activeTab, setActiveTab, isOpen, activeSmartListId, on
                     </button>
                 ))}
 
-                {smartLists.length > 0 && (
-                    <>
-                        <div className="mb-2 mt-6 px-4 text-[10px] font-bold uppercase tracking-widest text-gray-400">Smart Lists</div>
-                        {smartLists.map((list) => (
-                            <button
-                                key={list.id}
-                                className={clsx(
-                                    "flex w-full items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold transition-all duration-200 text-left",
-                                    activeSmartListId === list.id
-                                        ? "bg-indigo-500 text-white shadow-md shadow-indigo-500/20"
-                                        : "text-gray-500 hover:bg-indigo-50 hover:text-indigo-600 border border-transparent"
-                                )}
-                                onClick={() => onSmartListSelect(list)}
-                            >
-                                <Bookmark size={18} className={activeSmartListId === list.id ? "text-white" : "text-indigo-400"} />
-                                <span className="truncate">{list.name}</span>
-                            </button>
-                        ))}
-                    </>
-                )}
-            </nav>
 
-            <div className="mt-auto border-t border-gray-200 pt-6">
-                <button
-                    onClick={onAddLead}
-                    className="flex w-full items-center justify-center gap-2 rounded-xl bg-gray-900 py-3.5 font-semibold text-white shadow-md transition-transform hover:-translate-y-px hover:bg-black active:translate-y-px"
-                >
-                    <Plus size={20} />
-                    <span>New Lead</span>
-                </button>
-            </div>
+            </nav>
         </aside>
     );
 }
