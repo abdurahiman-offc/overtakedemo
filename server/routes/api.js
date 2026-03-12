@@ -22,6 +22,22 @@ router.post('/users', async (req, res, next) => {
     } catch (error) { next(error); }
 });
 
+router.put('/users/:id', async (req, res, next) => {
+    try {
+        const user = await User.findByIdAndUpdate(req.params.id, req.body, { new: true });
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json(user);
+    } catch (error) { next(error); }
+});
+
+router.delete('/users/:id', async (req, res, next) => {
+    try {
+        const user = await User.findByIdAndDelete(req.params.id);
+        if (!user) return res.status(404).json({ message: 'User not found' });
+        res.json({ message: 'User deleted successfully' });
+    } catch (error) { next(error); }
+});
+
 // --- TAGS --- //
 router.get('/tags', async (req, res, next) => {
     try {
@@ -72,7 +88,7 @@ router.delete('/smartlists/:id', async (req, res, next) => {
 router.get('/leads', async (req, res, next) => {
     try {
         const leads = await Lead.find()
-            .populate('assignedTo', 'username email')
+            .populate('assignedTo', 'username')
             .populate('assignmentHistory.userId', 'username')
             .sort({ createdAt: -1 });
         res.json(leads);
@@ -82,7 +98,7 @@ router.get('/leads', async (req, res, next) => {
 router.get('/leads/:id', async (req, res, next) => {
     try {
         const lead = await Lead.findById(req.params.id)
-            .populate('assignedTo', 'username email')
+            .populate('assignedTo', 'username')
             .populate('assignmentHistory.userId', 'username');
         if (!lead) return res.status(404).json({ message: 'Lead not found' });
         res.json(lead);
@@ -91,6 +107,15 @@ router.get('/leads/:id', async (req, res, next) => {
 
 router.post('/leads', async (req, res, next) => {
     try {
+        const { phone } = req.body;
+        // Check for existing lead with same phone
+        if (phone) {
+            const existingLead = await Lead.findOne({ phone: phone.trim() });
+            if (existingLead) {
+                return res.status(400).json({ message: `A contact with phone ${phone} already exists.` });
+            }
+        }
+
         // If assigned immediately on creation
         if (req.body.assignedTo) {
             req.body.assignmentHistory = [{
@@ -109,6 +134,17 @@ router.put('/leads/:id', async (req, res, next) => {
         const leadId = req.params.id;
         const updates = req.body;
 
+        // Check for phone uniqueness if updating phone
+        if (updates.phone) {
+            const existingWithPhone = await Lead.findOne({
+                phone: updates.phone.trim(),
+                _id: { $ne: leadId }
+            });
+            if (existingWithPhone) {
+                return res.status(400).json({ message: `Another contact with phone ${updates.phone} already exists.` });
+            }
+        }
+
         // Check if assignment changed
         if (updates.assignedTo) {
             const existingLead = await Lead.findById(leadId);
@@ -126,7 +162,7 @@ router.put('/leads/:id', async (req, res, next) => {
         }
 
         const updatedLead = await Lead.findByIdAndUpdate(leadId, updates, { new: true })
-            .populate('assignedTo', 'username email')
+            .populate('assignedTo', 'username')
             .populate('assignmentHistory.userId', 'username');
 
         if (!updatedLead) return res.status(404).json({ message: 'Lead not found' });

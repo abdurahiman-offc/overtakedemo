@@ -1,6 +1,8 @@
-import { Phone, MapPin, MessageSquare, Tag } from 'lucide-react';
+import { Phone, MapPin, MessageSquare, Tag, Briefcase, CreditCard, Calendar, CheckCircle2, X } from 'lucide-react';
 import { Lead } from '../../types';
 import { clsx } from 'clsx';
+import { format, isSameDay, parseISO, startOfDay, isValid } from 'date-fns';
+import { useLeads } from '../../context/LeadsContext';
 
 interface LeadCardProps {
     lead: Lead;
@@ -9,10 +11,25 @@ interface LeadCardProps {
 }
 
 export function LeadCard({ lead, onClick, onStatusChange }: LeadCardProps) {
+    const { completeFollowup } = useLeads();
+
     const typeConfig = {
         hot: "bg-red-500 shadow-red-500/30",
         warm: "bg-amber-500 shadow-amber-500/30",
         cold: "bg-blue-500 shadow-blue-500/30",
+    };
+
+    const isMissed = (dateStr?: string) => {
+        if (!dateStr) return false;
+        const date = parseISO(dateStr);
+        const today = startOfDay(new Date());
+        return isValid(date) && startOfDay(date) < today && !isSameDay(date, today);
+    };
+
+    const formatDate = (dateStr?: string) => {
+        if (!dateStr) return 'N/A';
+        const date = parseISO(dateStr);
+        return isValid(date) ? format(date, 'MMM d') : 'N/A';
     };
 
     return (
@@ -42,12 +59,64 @@ export function LeadCard({ lead, onClick, onStatusChange }: LeadCardProps) {
                 </div>
                 <div className="flex items-center gap-3">
                     <MapPin size={16} className="text-gray-400" />
-                    <span>{lead.place || "No location"}</span>
+                    <span className="font-medium text-gray-700">{lead.place || "None"}</span>
                 </div>
-                {lead.carDetails && lead.carDetails.length > 0 && (
+                <div className="flex items-center gap-3">
+                    <Briefcase size={16} className="text-gray-400" />
+                    <span className="font-medium text-gray-700">{lead.designation || "None"}</span>
+                </div>
+                {lead.paymentStatus && (
                     <div className="flex items-center gap-3">
-                        <MessageSquare size={16} className="text-gray-400" />
-                        <span className="truncate">{lead.carDetails.map(c => `${c.brandName} ${c.modelName}`).join(', ')}</span>
+                        <CreditCard size={16} className="text-emerald-500" />
+                        <span className="font-bold text-emerald-700">{lead.paymentStatus}</span>
+                    </div>
+                )}
+                {lead.carDetails && lead.carDetails.length > 0 && (
+                    <div className="flex items-start gap-3">
+                        <MessageSquare size={16} className="text-gray-400 mt-0.5" />
+                        <div className="flex flex-col gap-1">
+                            {lead.carDetails.map((c, idx) => {
+                                if (c.intent === 'exchange') {
+                                    return <span key={idx} className="text-xs">
+                                        <span className="font-semibold text-indigo-600">Exchange:</span> {c.ownedCar?.brandName} {c.ownedCar?.modelName} <span className="text-gray-400 font-bold mx-1">→</span> {c.wantedCar?.brandName} {c.wantedCar?.modelName}
+                                    </span>;
+                                }
+                                if (c.intent === 'buying') {
+                                    return <span key={idx} className="text-xs"><span className="font-semibold text-blue-600">Buy:</span> {c.wantedCar?.brandName || c.brandName} {c.wantedCar?.modelName || c.modelName}</span>;
+                                }
+                                return <span key={idx} className="text-xs"><span className="font-semibold text-amber-600">Sell:</span> {c.ownedCar?.brandName || c.brandName} {c.ownedCar?.modelName || c.modelName}</span>;
+                            })}
+                        </div>
+                    </div>
+                )}
+                {lead.followupDate && (
+                    <div className={clsx(
+                        "flex items-center justify-between gap-3 p-2 rounded-lg border transition-all",
+                        isMissed(lead.followupDate) ? "bg-red-50 border-red-100 text-red-700" : "bg-indigo-50/50 border-indigo-100 text-indigo-700"
+                    )}>
+                        <div className="flex items-center gap-2">
+                            <Calendar size={14} className={isMissed(lead.followupDate) ? "text-red-500" : "text-indigo-400"} />
+                            <span className="text-[10px] font-bold uppercase tracking-wider">{isMissed(lead.followupDate) ? 'Missed: ' : 'Next: '}{formatDate(lead.followupDate)}</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                onClick={(e) => { e.stopPropagation(); completeFollowup(lead._id, undefined, 'not_responded'); }}
+                                className="p-1.5 rounded-md bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-100 transition-all border border-gray-100 shadow-sm"
+                                title="Not Responded"
+                            >
+                                <X size={12} />
+                            </button>
+                            <button
+                                onClick={(e) => { e.stopPropagation(); completeFollowup(lead._id, undefined, 'responded'); }}
+                                className={clsx(
+                                    "p-1.5 rounded-md text-white transition-all shadow-sm",
+                                    isMissed(lead.followupDate) ? "bg-red-600 hover:bg-red-700" : "bg-indigo-600 hover:bg-indigo-700"
+                                )}
+                                title="Complete Follow-up"
+                            >
+                                <CheckCircle2 size={12} />
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>
@@ -73,9 +142,8 @@ export function LeadCard({ lead, onClick, onStatusChange }: LeadCardProps) {
                 >
                     <option value="new">New</option>
                     <option value="contacted">Contacted</option>
-                    <option value="followed_up">Followed Up</option>
-                    <option value="closed">Closed</option>
-                    <option value="lost">Lost</option>
+                    <option value="sold">Sold</option>
+                    <option value="deal_closed">Deal Closed</option>
                 </select>
             </div>
         </div>

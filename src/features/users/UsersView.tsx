@@ -1,34 +1,73 @@
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLeads } from '../../context/LeadsContext';
-import { UserPlus, Mail, Shield, X, Save } from 'lucide-react';
+import { UserPlus, Shield, X, Save, Edit2, Trash2 } from 'lucide-react';
+import { User } from '../../types';
 
 export function UsersView() {
-    const { users, addUser } = useLeads();
+    const { users, addUser, updateUser, deleteUser } = useLeads();
 
     const [isUserModalOpen, setIsUserModalOpen] = useState(false);
+    const [editingUser, setEditingUser] = useState<User | null>(null);
 
     const [userFormData, setUserFormData] = useState({
         username: '',
-        role: 'sales'
+        role: 'sales' as 'admin' | 'manager' | 'sales'
     });
+
+    const [error, setError] = useState('');
+
+    const openAddModal = () => {
+        setEditingUser(null);
+        setUserFormData({ username: '', role: 'sales' });
+        setError('');
+        setIsUserModalOpen(true);
+    };
+
+    const openEditModal = (user: User) => {
+        setEditingUser(user);
+        setUserFormData({
+            username: user.username || '',
+            role: user.role as 'admin' | 'manager' | 'sales'
+        });
+        setError('');
+        setIsUserModalOpen(true);
+    };
 
     const handleUserSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        await addUser({ ...userFormData, role: userFormData.role as 'admin' | 'manager' | 'sales' });
+
+        if (!userFormData.username.trim()) {
+            setError('Username is required');
+            return;
+        }
+
+        if (editingUser) {
+            await updateUser(editingUser._id, userFormData);
+        } else {
+            await addUser(userFormData);
+        }
         setIsUserModalOpen(false);
+        setEditingUser(null);
         setUserFormData({ username: '', role: 'sales' });
+        setError('');
+    };
+
+    const handleDeleteUser = async (id: string, username: string) => {
+        if (window.confirm(`Are you sure you want to delete user "${username}"?`)) {
+            await deleteUser(id);
+        }
     };
 
     return (
         <div className="flex flex-col gap-8">
             <div className="flex items-center justify-between">
                 <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">User Settings</h2>
-                    <p className="text-sm text-gray-500">Manage team members and roles.</p>
+                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Manage team users</h2>
+                    <p className="text-sm text-gray-500">Configure system settings and manage team users.</p>
                 </div>
                 <button
-                    onClick={() => setIsUserModalOpen(true)}
+                    onClick={openAddModal}
                     className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
                 >
                     <UserPlus size={18} />
@@ -56,10 +95,6 @@ export function UsersView() {
                                             </div>
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-gray-900">{user.username}</span>
-                                                <span className="flex items-center gap-1 text-xs text-gray-500">
-                                                    <Mail size={12} />
-                                                    {user.email}
-                                                </span>
                                             </div>
                                         </div>
                                     </td>
@@ -70,7 +105,22 @@ export function UsersView() {
                                         </div>
                                     </td>
                                     <td className="px-6 py-4 text-right">
-                                        <button className="text-sm font-bold text-indigo-600 hover:text-indigo-800">Edit</button>
+                                        <div className="flex justify-end gap-2">
+                                            <button
+                                                onClick={() => openEditModal(user)}
+                                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                title="Edit User"
+                                            >
+                                                <Edit2 size={16} />
+                                            </button>
+                                            <button
+                                                onClick={() => handleDeleteUser(user._id, user.username)}
+                                                className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                                title="Delete User"
+                                            >
+                                                <Trash2 size={16} />
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}
@@ -86,12 +136,12 @@ export function UsersView() {
                 </div>
             </div>
 
-            {/* ADD USER MODAL */}
+            {/* USER MODAL */}
             {isUserModalOpen && typeof document !== 'undefined' && createPortal(
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-50/70 p-4">
                     <div className="w-full max-w-md flex flex-col overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-2xl animate-fadeIn">
                         <div className="flex items-center justify-between border-b border-gray-100/50 px-6 py-5">
-                            <h2 className="text-xl font-bold text-gray-900">Add New User</h2>
+                            <h2 className="text-xl font-bold text-gray-900">{editingUser ? 'Edit User' : 'Add New User'}</h2>
                             <button onClick={() => setIsUserModalOpen(false)} className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900">
                                 <X size={20} />
                             </button>
@@ -101,21 +151,23 @@ export function UsersView() {
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-sm font-semibold text-gray-700">Username</label>
                                 <input
-                                    required
                                     value={userFormData.username}
-                                    onChange={(e) => setUserFormData({ ...userFormData, username: e.target.value })}
-                                    className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100 placeholder-gray-400"
+                                    onChange={(e) => {
+                                        setUserFormData({ ...userFormData, username: e.target.value });
+                                        if (error) setError('');
+                                    }}
+                                    className={`rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all placeholder-gray-400 ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-indigo-500 focus:ring-indigo-100'}`}
                                     placeholder="johndoe"
                                 />
+                                {error && <span className="text-[10px] font-bold text-red-500 uppercase px-1">{error}</span>}
                             </div>
-
 
 
                             <div className="flex flex-col gap-1.5">
                                 <label className="text-sm font-semibold text-gray-700">Role</label>
                                 <select
                                     value={userFormData.role}
-                                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value })}
+                                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value as 'admin' | 'manager' | 'sales' })}
                                     className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
                                 >
                                     <option value="admin">Admin</option>
@@ -137,7 +189,7 @@ export function UsersView() {
                                     className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700"
                                 >
                                     <Save size={18} />
-                                    Save User
+                                    {editingUser ? 'Update User' : 'Save User'}
                                 </button>
                             </div>
                         </form>

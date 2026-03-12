@@ -1,5 +1,7 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { Lead, SmartList, User, Tag } from '../types';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
+import { isSameDay } from 'date-fns';
+import { Lead, SmartList, User, Tag, FollowupRecord } from '../types';
+import { useNotifications } from './NotificationContext';
 
 interface LeadsContextType {
     leads: Lead[];
@@ -13,6 +15,8 @@ interface LeadsContextType {
     updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
     deleteLead: (id: string) => Promise<void>;
     addUser: (user: Partial<User>) => Promise<void>;
+    updateUser: (id: string, updates: Partial<User>) => Promise<void>;
+    deleteUser: (id: string) => Promise<void>;
     addSmartList: (list: Partial<SmartList>) => Promise<void>;
     deleteSmartList: (id: string) => Promise<void>;
     addTag: (tag: Partial<Tag>) => Promise<void>;
@@ -20,6 +24,7 @@ interface LeadsContextType {
     bulkDeleteLeads: (ids: string[]) => Promise<void>;
     bulkAssignLeads: (ids: string[], userId: string) => Promise<void>;
     bulkUpdateLeads: (ids: string[], updates?: Partial<Lead>, addTags?: string[], removeTags?: string[]) => Promise<void>;
+    completeFollowup: (leadId: string, note?: string, result?: 'responded' | 'not_responded') => Promise<void>;
 }
 
 const LeadsContext = createContext<LeadsContextType | undefined>(undefined);
@@ -31,6 +36,8 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const { addNotification } = useNotifications();
+    const isFirstLoad = useRef(true);
 
     const fetchData = async () => {
         try {
@@ -44,14 +51,17 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
 
             if (leadsRes.ok) {
                 const fetchedLeads = await leadsRes.json();
-                setLeads(fetchedLeads.map((l: Record<string, unknown>) => ({
+                const mappedLeads = fetchedLeads.map((l: Record<string, unknown>) => ({
                     ...l,
                     tags: l.tags || [],
                     carDetails: l.carDetails || [],
                     username: l.username || 'Unknown',
                     phone: l.phone || 'Unknown',
-                    assignmentHistory: l.assignmentHistory || []
-                } as unknown as Lead)));
+                    assignmentHistory: l.assignmentHistory || [],
+                    followupHistory: l.followupHistory || []
+                } as unknown as Lead));
+
+                setLeads(mappedLeads);
             }
             if (usersRes.ok) {
                 const fetchedUsers = await usersRes.json();
@@ -73,7 +83,10 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
     };
 
     useEffect(() => {
-        fetchData();
+        if (isFirstLoad.current) {
+            fetchData();
+            isFirstLoad.current = false;
+        }
     }, []);
 
     const addLead = async (leadData: Partial<Lead>) => {
@@ -84,6 +97,7 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
                 body: JSON.stringify(leadData)
             });
             if (res.ok) {
+                addNotification(`New lead created: ${leadData.name}`, 'success');
                 await fetchData(); // Refresh to get populated refs
             }
         } catch (err) { console.error('Error adding lead', err); }
@@ -123,6 +137,29 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
                 setUsers(prev => [newUser, ...prev]);
             }
         } catch (err) { console.error('Error adding user', err); }
+    };
+
+    const updateUser = async (id: string, updates: Partial<User>) => {
+        try {
+            const res = await fetch(`/api/users/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                const updatedUser = await res.json();
+                setUsers(prev => prev.map(u => u._id === id ? updatedUser : u));
+            }
+        } catch (err) { console.error('Error updating user', err); }
+    };
+
+    const deleteUser = async (id: string) => {
+        try {
+            const res = await fetch(`/api/users/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setUsers(prev => prev.filter(u => u._id !== id));
+            }
+        } catch (err) { console.error('Error deleting user', err); }
     };
 
     const addSmartList = async (listData: Partial<SmartList>) => {
@@ -204,13 +241,42 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
         } catch (err) { console.error('Error bulk updating leads', err); }
     };
 
+    const completeFollowup = async (leadId: string, note?: string, status: 'responded' | 'not_responded' | 'rescheduled' = 'responded') => {
+        const lead = leads.find(l => l._id === leadId);
+        if (!lead || !lead.followupDate) return;
+
+        const scheduledDate = new Date(lead.followupDate);
+        const today = new Date();
+        const wasMissed = scheduledDate < today && !isSameDay(scheduledDate, today);
+
+        const assignedToId = typeof lead.assignedTo === 'object' ? lead.assignedTo?._id : lead.assignedTo;
+
+        const newHistoryRecord: FollowupRecord = {
+            userId: assignedToId,
+            scheduledDate: lead.followupDate,
+            completedDate: today.toISOString(),
+            note,
+            wasMissed,
+            result: status as "responded" | "not_responded"
+        };
+
+        const updates: Partial<Lead> = {
+            followupDate: '',
+            followupCount: lead.followupCount + 1,
+            followupHistory: [...(lead.followupHistory || []), newHistoryRecord]
+        };
+
+        await updateLead(leadId, updates);
+    };
+
     return (
         <LeadsContext.Provider value={{
             leads, users, smartLists, tags, loading, error,
             fetchLeads: fetchData, addLead, updateLead, deleteLead,
-            addUser, addSmartList, deleteSmartList,
+            addUser, updateUser, deleteUser, addSmartList, deleteSmartList,
             addTag, deleteTag,
-            bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads
+            bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads,
+            completeFollowup
         }}>
             {children}
         </LeadsContext.Provider>

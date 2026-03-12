@@ -1,7 +1,6 @@
 export interface User {
     _id: string;
     username: string;
-    email: string;
     role: 'admin' | 'manager' | 'sales';
 }
 
@@ -11,14 +10,29 @@ export interface Tag {
     color: string;
 }
 
-export interface CarDetail {
-    _id?: string;
+export interface VehicleInfo {
     brandName: string;
     modelName: string;
     fuelType: string;
     kmDriven: string;
+    year?: string;
+    amount?: string;
+}
+
+export interface CarDetail {
+    _id?: string;
+    // Legacy support
+    brandName?: string;
+    modelName?: string;
+    fuelType?: string;
+    kmDriven?: string;
+
+    // New nested structure
+    wantedCar?: VehicleInfo;
+    ownedCar?: VehicleInfo;
+
     additionalReqs: string;
-    intent: 'buying' | 'selling';
+    intent: 'buying' | 'selling' | 'exchange';
 }
 
 export interface AssignmentRecord {
@@ -28,15 +42,27 @@ export interface AssignmentRecord {
     assignedBy: string;
 }
 
+export interface FollowupRecord {
+    _id?: string;
+    userId?: string;
+    scheduledDate: string;
+    completedDate: string;
+    newScheduledDate?: string;
+    note?: string;
+    wasMissed: boolean;
+    result: 'responded' | 'not_responded' | 'rescheduled';
+}
+
 export interface Lead {
     _id: string;
     name: string;
     phone: string;
     place: string;
+    designation: string;
     leadOrigin: 'WhatsApp' | 'Insta' | 'FB' | 'Walk-in' | 'Tele' | 'Referral' | 'Web' | 'OLX' | 'Other';
     enquiredVehicle: string;
     leadType: 'hot' | 'warm' | 'cold';
-    status: 'new' | 'contacted' | 'followed_up' | 'closed' | 'lost';
+    status: 'new' | 'contacted' | 'sold' | 'deal_closed';
     notes: string[];
     tags: string[];
     carDetails: CarDetail[];
@@ -45,6 +71,8 @@ export interface Lead {
     followupDate?: string;
     followupNote?: string[];
     followupCount: number;
+    followupHistory: FollowupRecord[];
+    paymentStatus?: 'Advance Payment' | 'Full Payment' | '';
     createdAt: string;
     updatedAt: string;
 }
@@ -60,6 +88,7 @@ export interface LeadFilter {
     name?: string;
     phone?: string;
     place?: string;
+    designation?: string;
     tag?: string;
     leadType?: 'hot' | 'warm' | 'cold' | 'all';
     status?: string;
@@ -68,4 +97,14 @@ export interface LeadFilter {
     leadOrigin?: string;
     assignedTo?: string;
     selectedIds?: string[];
+    paymentStatus?: 'Advance Payment' | 'Full Payment' | '';
+    intent?: 'buying' | 'selling' | 'exchange' | 'all';
+    brandName?: string;
+    modelName?: string;
+    fuelType?: string;
+    year?: string;
+    kmDrivenValue?: string;
+    kmDrivenOp?: 'eq' | 'gt' | 'lt';
+    amountValue?: string;
+    amountOp?: 'eq' | 'gt' | 'lt';
 }

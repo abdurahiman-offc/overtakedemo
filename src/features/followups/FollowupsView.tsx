@@ -1,16 +1,15 @@
 import { useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useLeads } from '../../context/LeadsContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay, parseISO, startOfDay, differenceInDays } from 'date-fns';
-import { Calendar as CalendarIcon, AlertCircle, Clock, CheckCircle2, Phone, MapPin, User, Tag, Edit3, Eye, Plus, Filter, Zap, PhoneCall, Users } from 'lucide-react';
+import { Phone, MapPin, Calendar as CalendarIcon, Clock, CheckCircle2, Briefcase, AlertCircle, User, Tag, Edit3, Eye, Plus, Filter, Zap, PhoneCall, Users, X } from 'lucide-react';
 import { Lead } from '../../types';
-import { LeadPage } from '../leads/LeadPage';
 import { LeadFormModal } from '../leads/LeadFormModal';
 
 export function FollowupsView() {
-    const { leads, users, updateLead } = useLeads();
-    const [selectedLead, setSelectedLead] = useState<Lead | null>(null);
-    const [editingLead, setEditingLead] = useState<Lead | null>(null);
+    const { leads, users, updateLead, completeFollowup } = useLeads();
+    const navigate = useNavigate();
 
     // Filters & Tabs
     const [activeTab, setActiveTab] = useState<'today' | 'upcoming' | 'missed'>('today');
@@ -127,20 +126,7 @@ export function FollowupsView() {
     };
 
 
-    if (selectedLead) {
-        return (
-            <div className="w-full flex-1 animate-fadeIn">
-                <LeadPage
-                    lead={selectedLead}
-                    onBack={() => setSelectedLead(null)}
-                    onEdit={(l) => {
-                        setSelectedLead(null);
-                        setEditingLead(l);
-                    }}
-                />
-            </div>
-        );
-    }
+    const [editingLead, setEditingLead] = useState<Lead | null>(null);
 
     return (
         <div className="flex flex-col gap-6">
@@ -266,15 +252,31 @@ export function FollowupsView() {
                                                             <h4 className="font-bold text-gray-900 truncate leading-tight">{lead.name}</h4>
                                                             <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-500 mt-1">
                                                                 <span className="flex items-center gap-1"><Phone size={10} /> {lead.phone}</span>
-                                                                {lead.place && (
-                                                                    <>
-                                                                        <span>•</span>
-                                                                        <span className="flex items-center gap-1"><MapPin size={10} /> {lead.place}</span>
-                                                                    </>
-                                                                )}
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span className="flex items-center gap-1"><MapPin size={10} /> {lead.place || "None"}</span>
+                                                                </>
+                                                                <>
+                                                                    <span>•</span>
+                                                                    <span className="flex items-center gap-1"><Briefcase size={10} /> {lead.designation || "None"}</span>
+                                                                </>
                                                             </div>
                                                         </div>
                                                         <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); completeFollowup(lead._id, undefined, 'not_responded'); }}
+                                                                className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50 shadow-sm transition-all"
+                                                                title="Not Responded"
+                                                            >
+                                                                <X size={14} />
+                                                            </button>
+                                                            <button
+                                                                onClick={(e) => { e.stopPropagation(); completeFollowup(lead._id, undefined, 'responded'); }}
+                                                                className={`p-1.5 rounded-lg border border-transparent shadow-sm transition-all ${activeTab === 'missed' ? 'text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-200' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-200'}`}
+                                                                title="Complete Follow-up"
+                                                            >
+                                                                <CheckCircle2 size={14} />
+                                                            </button>
                                                             <button
                                                                 onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
                                                                 className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
@@ -293,18 +295,20 @@ export function FollowupsView() {
                                                         </div>
                                                     </div>
 
-                                                    {lead.tags && lead.tags.length > 0 && (
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {lead.tags.slice(0, 3).map((tag, idx) => (
-                                                                <span key={idx} className="flex items-center gap-1 text-[9px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md border border-gray-200">
-                                                                    <Tag size={8} className="text-gray-400" /> {tag}
-                                                                </span>
-                                                            ))}
-                                                            {lead.tags.length > 3 && (
-                                                                <span className="text-[9px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md border border-gray-200">+{lead.tags.length - 3}</span>
-                                                            )}
-                                                        </div>
-                                                    )}
+                                                    {
+                                                        lead.tags && lead.tags.length > 0 && (
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {lead.tags.slice(0, 3).map((tag, idx) => (
+                                                                    <span key={idx} className="flex items-center gap-1 text-[9px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md border border-gray-200">
+                                                                        <Tag size={8} className="text-gray-400" /> {tag}
+                                                                    </span>
+                                                                ))}
+                                                                {lead.tags.length > 3 && (
+                                                                    <span className="text-[9px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md border border-gray-200">+{lead.tags.length - 3}</span>
+                                                                )}
+                                                            </div>
+                                                        )
+                                                    }
 
                                                     <div className="mt-1 flex items-center justify-between">
                                                         {activeTab === 'missed' ? (
@@ -323,7 +327,7 @@ export function FollowupsView() {
                                                     </div>
 
                                                     <button
-                                                        onClick={(e) => { e.stopPropagation(); setSelectedLead(lead); }}
+                                                        onClick={() => navigate(`/contact/${lead._id}`)}
                                                         className="w-full mt-1 flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold py-2 rounded-xl border border-indigo-100 transition-colors"
                                                     >
                                                         <Eye size={14} /> View Lead
@@ -339,12 +343,14 @@ export function FollowupsView() {
                 })}
             </div>
 
-            {editingLead && (
-                <LeadFormModal
-                    initialData={editingLead}
-                    onClose={() => setEditingLead(null)}
-                />
-            )}
-        </div>
+            {
+                editingLead && (
+                    <LeadFormModal
+                        initialData={editingLead}
+                        onClose={() => setEditingLead(null)}
+                    />
+                )
+            }
+        </div >
     );
 }

@@ -1,23 +1,26 @@
 import { Users, PhoneCall, Zap, Calendar as CalendarIcon } from 'lucide-react';
 import { useLeads } from '../../context/LeadsContext';
 import { isSameDay, parseISO } from 'date-fns';
+import { useNavigate } from 'react-router-dom';
 
 export function Dashboard() {
     const { leads, users } = useLeads();
+    const navigate = useNavigate();
 
     const today = new Date();
     const hotLeads = leads.filter(l => l.leadType === 'hot').length;
     const warmLeads = leads.filter(l => l.leadType === 'warm').length;
     const coldLeads = leads.filter(l => l.leadType === 'cold').length;
     const unassignedLeads = leads.filter(l => !l.assignedTo).length;
+    const advancePayments = leads.filter(l => l.paymentStatus === 'Advance Payment').length;
 
     const todaysFollowupsCount = leads.filter(l => {
-        if (!l.followupDate || l.status === 'closed' || l.status === 'lost') return false;
+        if (!l.followupDate || l.status === 'sold' || l.status === 'deal_closed') return false;
         return isSameDay(parseISO(l.followupDate), today);
     }).length;
 
     const missedFollowups = leads.filter(l => {
-        if (!l.followupDate || l.status === 'closed' || l.status === 'lost') return false;
+        if (!l.followupDate || l.status === 'sold' || l.status === 'deal_closed') return false;
         const fDate = parseISO(l.followupDate);
         return fDate < today && !isSameDay(today, fDate);
     }).length;
@@ -31,6 +34,7 @@ export function Dashboard() {
 
     const row2 = [
         { title: 'Unassigned', value: unassignedLeads, icon: CalendarIcon, color: 'text-orange-500', bg: 'bg-orange-50' },
+        { title: 'Advance Payment', value: advancePayments, icon: Zap, color: 'text-indigo-600', bg: 'bg-indigo-50' },
         { title: 'Today\'s Follow-ups', value: todaysFollowupsCount, icon: CalendarIcon, color: 'text-emerald-600', bg: 'bg-emerald-50' },
         { title: 'Missed Follow-ups', value: missedFollowups, icon: Zap, color: 'text-red-600', bg: 'bg-red-50' },
     ];
@@ -52,9 +56,9 @@ export function Dashboard() {
             return assignedId === user._id;
         });
 
-        const todayFollowups = userLeads.filter(l => l.followupDate && isSameDay(parseISO(l.followupDate), today) && l.status !== 'closed' && l.status !== 'lost').length;
+        const todayFollowups = userLeads.filter(l => l.followupDate && isSameDay(parseISO(l.followupDate), today) && l.status !== 'sold' && l.status !== 'deal_closed').length;
         const missedUFollowups = userLeads.filter(l => {
-            if (!l.followupDate || l.status === 'closed' || l.status === 'lost') return false;
+            if (!l.followupDate || l.status === 'sold' || l.status === 'deal_closed') return false;
             const fDate = parseISO(l.followupDate);
             return fDate < today && !isSameDay(today, fDate);
         }).length;
@@ -76,7 +80,7 @@ export function Dashboard() {
                         <span className="font-bold text-sm">Action Required: You have {missedFollowups} missed follow-ups!</span>
                     </div>
                     <button
-                        onClick={() => window.dispatchEvent(new CustomEvent('switchTab', { detail: 'followups' }))}
+                        onClick={() => navigate('/followups')}
                         className="text-xs font-bold uppercase tracking-wider text-red-600 hover:underline"
                     >
                         View Now
@@ -101,7 +105,7 @@ export function Dashboard() {
                 </div>
 
                 {/* Row 2: Secondary Metrics */}
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
                     {row2.map((card, idx) => (
                         <div key={idx} className="flex items-center gap-3 rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-transform hover:-translate-y-1 hover:shadow-md">
                             <div className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.bg} ${card.color}`}>
@@ -135,7 +139,7 @@ export function Dashboard() {
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-4">
                     <h3 className="font-bold text-gray-900 border-b border-gray-50 pb-4">Status Breakdown</h3>
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                        {['new', 'contacted', 'followed_up', 'closed', 'lost'].map((status) => {
+                        {['new', 'contacted', 'sold', 'deal_closed'].map((status) => {
                             const count = statusBreakdown[status] || 0;
                             return (
                                 <div key={status} className="flex flex-col p-3 rounded-xl bg-gray-50 border border-gray-100">
