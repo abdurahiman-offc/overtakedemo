@@ -5,6 +5,7 @@ import { Search, Filter, X, Briefcase, Bookmark, MoreHorizontal, Trash2, UserPlu
 import { isSameDay, parseISO, format } from 'date-fns';
 import { LeadFilter } from '../../types';
 import { TagInput } from '../../components/TagInput';
+import { ConfirmDeleteModal } from '../../components/ConfirmDeleteModal';
 
 interface LeadListProps {
     initialFilter?: 'all' | 'followup';
@@ -62,6 +63,21 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
     const [editingApiLeadId, setEditingApiLeadId] = useState<string | null>(null);
     const [editData, setEditData] = useState<Record<string, any>>({});
     const [editFocus, setEditFocus] = useState<string | null>(null);
+
+    // Delete Modal State
+    const [deleteModal, setDeleteModal] = useState<{
+        isOpen: boolean;
+        title: string;
+        message: string;
+        onConfirm: () => void;
+    }>({
+        isOpen: false,
+        title: '',
+        message: '',
+        onConfirm: () => { }
+    });
+
+    const closeDeleteModal = () => setDeleteModal(prev => ({ ...prev, isOpen: false }));
 
     const startEditApiLead = (lead: any) => {
         setEditingApiLeadId(lead._id);
@@ -516,10 +532,15 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
     };
 
     const handleBulkDelete = async () => {
-        if (window.confirm(`Are you sure you want to delete ${selectedIds.length} contacts?`)) {
-            await bulkDeleteLeads(selectedIds);
-            setSelectedIds([]);
-        }
+        setDeleteModal({
+            isOpen: true,
+            title: 'Bulk Delete Contacts',
+            message: `You are about to permanently delete ${selectedIds.length} contacts. This action cannot be undone.`,
+            onConfirm: async () => {
+                await bulkDeleteLeads(selectedIds);
+                setSelectedIds([]);
+            }
+        });
     };
 
     const handleBulkAssign = async (userId: string) => {
@@ -606,7 +627,17 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                             {list.name}
                         </button>
                         <button
-                            onClick={(e) => { e.stopPropagation(); if (list._id && window.confirm('Delete this smart list?')) deleteSmartList(list._id); }}
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                if (list._id) {
+                                    setDeleteModal({
+                                        isOpen: true,
+                                        title: 'Delete Smart List',
+                                        message: `Are you sure you want to delete the smart list "${list.name}"?`,
+                                        onConfirm: () => deleteSmartList(list._id!)
+                                    });
+                                }
+                            }}
                             className="absolute -top-1 -right-1 hidden group-hover:flex h-4 w-4 bg-red-500 text-white rounded-full items-center justify-center text-[10px] shadow-sm z-10"
                         >
                             <X size={10} />
@@ -693,10 +724,15 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                                 <button
                                     onClick={async () => {
                                         if (currentMode === 'apileads') {
-                                            if (window.confirm(`Delete ${selectedIds.length} pending API leads?`)) {
-                                                await Promise.all(selectedIds.map(id => deleteApiLead(id)));
-                                                setSelectedIds([]);
-                                            }
+                                            setDeleteModal({
+                                                isOpen: true,
+                                                title: 'Delete API Leads',
+                                                message: `You are about to permanently delete ${selectedIds.length} pending API leads.`,
+                                                onConfirm: async () => {
+                                                    await Promise.all(selectedIds.map(id => deleteApiLead(id)));
+                                                    setSelectedIds([]);
+                                                }
+                                            });
                                         } else {
                                             handleBulkDelete();
                                         }
@@ -1536,6 +1572,14 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                 </div>
             )}
 
+            {/* Delete Confirmation Modal */}
+            <ConfirmDeleteModal
+                isOpen={deleteModal.isOpen}
+                onClose={closeDeleteModal}
+                onConfirm={deleteModal.onConfirm}
+                title={deleteModal.title}
+                message={deleteModal.message}
+            />
         </div>
     );
 }

@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useLeads } from '../../context/LeadsContext';
 import { UserPlus, Shield, X, Save, Edit2, Trash2 } from 'lucide-react';
 import { User } from '../../types';
+import { ConfirmDeleteModal } from '../../components/ConfirmDeleteModal';
 
 export function UsersView() {
     const { users, addUser, updateUser, deleteUser } = useLeads();
@@ -16,6 +17,11 @@ export function UsersView() {
     });
 
     const [error, setError] = useState('');
+    const [deleteModal, setDeleteModal] = useState<{ isOpen: boolean; id: string; username: string }>({
+        isOpen: false,
+        id: '',
+        username: ''
+    });
 
     const openAddModal = () => {
         setEditingUser(null);
@@ -53,9 +59,14 @@ export function UsersView() {
         setError('');
     };
 
-    const handleDeleteUser = async (id: string, username: string) => {
-        if (window.confirm(`Are you sure you want to delete user "${username}"?`)) {
-            await deleteUser(id);
+    const handleDeleteUser = (id: string, username: string) => {
+        setDeleteModal({ isOpen: true, id, username });
+    };
+
+    const confirmDeleteUser = async () => {
+        if (deleteModal.id) {
+            await deleteUser(deleteModal.id);
+            setDeleteModal({ isOpen: false, id: '', username: '' });
         }
     };
 
@@ -192,6 +203,14 @@ export function UsersView() {
                 </div>,
                 document.body
             )}
+            {/* Delete Confirmation Modal */}
+            <ConfirmDeleteModal
+                isOpen={deleteModal.isOpen}
+                onClose={() => setDeleteModal({ ...deleteModal, isOpen: false })}
+                onConfirm={confirmDeleteUser}
+                title="Delete User Account"
+                message={`Are you sure you want to permanently delete the user account for "${deleteModal.username}"? They will lose all access to the CRM.`}
+            />
         </div>
     );
 }

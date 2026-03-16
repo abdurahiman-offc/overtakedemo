@@ -4,6 +4,7 @@ import { useLeads } from '../../context/LeadsContext';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useState } from 'react';
 import { LeadFormModal } from './LeadFormModal';
+import { ConfirmDeleteModal } from '../../components/ConfirmDeleteModal';
 
 export function LeadPage() {
     const { id } = useParams<{ id: string }>();
@@ -13,6 +14,7 @@ export function LeadPage() {
     const [generalNote, setGeneralNote] = useState('');
     const [followupNoteInputPage, setFollowupNoteInputPage] = useState('');
     const [newFollowupDate, setNewFollowupDate] = useState('');
+    const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
 
     const handleAddGeneralNote = async () => {
         if (!generalNote.trim() || !id) return;
@@ -64,7 +66,11 @@ export function LeadPage() {
     };
 
     const handleDelete = () => {
-        if (lead && window.confirm('Are you sure you want to delete this lead?')) {
+        setIsDeleteModalOpen(true);
+    };
+
+    const confirmDelete = () => {
+        if (lead) {
             deleteLead(lead._id);
             onBack();
         }
@@ -587,6 +593,14 @@ export function LeadPage() {
                 </div>
             </div>
 
+            {/* Delete Confirmation Modal */}
+            <ConfirmDeleteModal
+                isOpen={isDeleteModalOpen}
+                onClose={() => setIsDeleteModalOpen(false)}
+                onConfirm={confirmDelete}
+                title="Delete Contact"
+                message={`Are you sure you want to permanently delete "${lead.name}"? This action cannot be undone.`}
+            />
         </div>
     );
 }
