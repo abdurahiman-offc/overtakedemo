@@ -91,7 +91,7 @@ export function WorkingReport() {
                         Cumulative Summary
                     </div>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100">
@@ -125,6 +125,41 @@ export function WorkingReport() {
                         </tbody>
                     </table>
                 </div>
+
+                {/* Mobile view cards for Historical KPI */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                    {cumulativeData.map(user => (
+                        <div key={user._id} className="p-4 flex flex-col gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center text-[#1B1B19] font-bold uppercase border border-gray-100">
+                                    {user.username.charAt(0)}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-gray-900">{user.username}</span>
+                                    <span className="text-xs text-gray-500 capitalize">{user.role}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    <span className="text-[10px] uppercase text-gray-400 font-bold block mb-1">Scheduled</span>
+                                    <span className="text-sm font-bold text-gray-700">{user.total}</span>
+                                </div>
+                                <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                                    <span className="text-[10px] uppercase text-emerald-600 font-bold block mb-1">Completed</span>
+                                    <span className="text-sm font-bold text-emerald-700">{user.completed}</span>
+                                </div>
+                                <div className="bg-orange-50 p-2 rounded-lg border border-orange-100">
+                                    <span className="text-[10px] uppercase text-orange-600 font-bold block mb-1">No Response</span>
+                                    <span className="text-sm font-bold text-orange-700">{user.noResponse}</span>
+                                </div>
+                                <div className="bg-red-50 p-2 rounded-lg border border-red-100">
+                                    <span className="text-[10px] uppercase text-red-600 font-bold block mb-1">Missed</span>
+                                    <span className="text-sm font-bold text-red-700">{user.missed}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                </div>
             </div>
 
             {/* Daily Performance Section */}
@@ -154,7 +189,7 @@ export function WorkingReport() {
                     </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100">
@@ -188,6 +223,44 @@ export function WorkingReport() {
                             ))}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile view cards for Daily Performance */}
+                <div className="sm:hidden divide-y divide-gray-50">
+                    {dailyData.map(user => (
+                        <div key={user._id} className="p-4 flex flex-col gap-4">
+                            <div className="flex items-center gap-3">
+                                <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center text-[#1B1B19] font-bold uppercase border border-gray-100">
+                                    {user.username.charAt(0)}
+                                </div>
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-gray-900">{user.username}</span>
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                                <div className="bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    <span className="text-[10px] uppercase text-gray-400 font-bold block mb-1">Scheduled</span>
+                                    <span className="text-sm font-bold text-gray-700">{user.scheduled}</span>
+                                </div>
+                                <div className="bg-emerald-50 p-2 rounded-lg border border-emerald-100">
+                                    <span className="text-[10px] uppercase text-emerald-600 font-bold block mb-1">Completed</span>
+                                    <span className="text-sm font-bold text-emerald-700">{user.completed}</span>
+                                </div>
+                                <div className="bg-orange-50 p-2 rounded-lg border border-orange-100">
+                                    <span className="text-[10px] uppercase text-orange-600 font-bold block mb-1">No Response</span>
+                                    <span className="text-sm font-bold text-orange-700">{user.noResponse}</span>
+                                </div>
+                                <div className="bg-red-50 p-2 rounded-lg border border-red-100">
+                                    <span className="text-[10px] uppercase text-red-600 font-bold block mb-1">Missed</span>
+                                    <span className="text-sm font-bold text-red-700">{user.missed}</span>
+                                </div>
+                                <div className="col-span-2 bg-blue-50 p-2 rounded-lg border border-blue-100 flex items-center justify-between">
+                                    <span className="text-[10px] uppercase text-blue-600 font-bold">Upcoming Leads</span>
+                                    <span className="text-sm font-bold text-blue-700">{user.upcoming}</span>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
             </div>
         </div>

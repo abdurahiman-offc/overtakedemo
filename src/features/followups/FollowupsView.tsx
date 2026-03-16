@@ -127,33 +127,35 @@ export function FollowupsView() {
         <div className="flex flex-col gap-6">
 
             {/* Top Bar: Tabs & Filters */}
-            <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-2 rounded-2xl border border-gray-100 shadow-sm">
+            <div className="flex flex-col lg:flex-row justify-between items-center gap-4 bg-white p-2 sm:p-3 rounded-2xl border border-gray-100 shadow-sm">
 
                 {/* Tabs */}
-                <div className="flex w-full md:w-auto p-1 bg-gray-50 rounded-xl">
-                    {tabs.map((tab) => (
-                        <button
-                            key={tab.id}
-                            /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
-                            onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 ${
-                                activeTab === tab.id
-                                    ? `${tab.activeBg} ${tab.border} text-gray-900 shadow-sm`
-                                    : `text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent`
-                                }`}
-                        >
-                            <tab.icon size={16} className={activeTab === tab.id ? tab.color : 'text-gray-400'} />
-                            {tab.title}
-                            <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? tab.bg + ' ' + tab.color : 'bg-gray-200 text-gray-500'}`}>
-                                {categorizedByTime[tab.id].length}
-                            </span>
-                        </button>
-                    ))}
+                <div className="flex w-full lg:w-auto p-1 bg-gray-50 rounded-xl overflow-x-auto no-scrollbar">
+                    <div className="flex gap-1 min-w-max w-full">
+                        {tabs.map((tab) => (
+                            <button
+                                key={tab.id}
+                                /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
+                                onClick={() => setActiveTab(tab.id as any)}
+                                className={`flex items-center justify-center gap-2 px-4 sm:px-6 py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-all duration-200 whitespace-nowrap ${
+                                    activeTab === tab.id
+                                        ? `${tab.activeBg} ${tab.border} text-gray-900 shadow-sm`
+                                        : `text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent`
+                                    }`}
+                            >
+                                <tab.icon size={16} className={activeTab === tab.id ? tab.color : 'text-gray-400'} />
+                                {tab.title}
+                                <span className={`ml-1 px-2 py-0.5 rounded-full text-[10px] ${activeTab === tab.id ? tab.bg + ' ' + tab.color : 'bg-gray-200 text-gray-500'}`}>
+                                    {categorizedByTime[tab.id].length}
+                                </span>
+                            </button>
+                        ))}
+                    </div>
                 </div>
 
                 {/* Global Filters */}
-                <div className="flex items-center gap-4 w-full md:w-auto px-2">
-                    <div className="flex items-center gap-2 text-gray-500 font-medium">
+                <div className="grid grid-cols-2 lg:flex lg:items-center gap-3 sm:gap-4 w-full lg:w-auto px-1 sm:px-2">
+                    <div className="col-span-2 lg:flex items-center gap-2 text-gray-500 font-bold text-xs uppercase tracking-wider hidden lg:flex">
                         <Filter size={16} /> Filters:
                     </div>
 
@@ -162,7 +164,7 @@ export function FollowupsView() {
                             type="date"
                             value={specificDateFilter}
                             onChange={(e) => setSpecificDateFilter(e.target.value)}
-                            className="flex-1 md:flex-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium focus:border-[#1B1B19] focus:outline-none transition-colors"
+                            className="w-full lg:w-auto rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium focus:border-[#1B1B19] focus:outline-none transition-colors"
                         />
                         {specificDateFilter && (
                             <button
@@ -178,7 +180,7 @@ export function FollowupsView() {
                     <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="flex-1 md:flex-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium focus:border-[#1B1B19] focus:outline-none transition-colors min-w-[150px]"
+                        className="w-full lg:w-auto rounded-xl border border-gray-200 bg-gray-50 px-3 sm:px-4 py-2 text-xs sm:text-sm font-medium focus:border-[#1B1B19] focus:outline-none transition-colors min-w-[120px] sm:min-w-[150px]"
                     >
                         <option value="all">Assignee: All</option>
                         <option value="unassigned">Unassigned</option>
@@ -191,7 +193,7 @@ export function FollowupsView() {
             </div>
 
             {/* Kanban Board Columns (Lead Types) */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[calc(100vh-280px)]">
+            <div className="flex lg:grid lg:grid-cols-3 gap-6 h-[calc(100vh-280px)] overflow-x-auto snap-x snap-mandatory no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
                 {leadTypeColumns.map((column) => {
                     const columnLeads = columnsData[column.id];
 
@@ -200,7 +202,7 @@ export function FollowupsView() {
                             key={column.id}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, column.id)}
-                            className={`flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50/50 p-4 overflow-hidden min-w-[320px] transition-colors ${draggedLead && draggedLead.leadType !== column.id ? 'bg-gray-100 border-dashed border-gray-300' : ''}`}
+                            className={`w-[85vw] lg:w-auto flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50/50 p-4 overflow-hidden shrink-0 snap-center transition-colors ${draggedLead && draggedLead.leadType !== column.id ? 'bg-gray-100 border-dashed border-gray-300' : ''}`}
                             >
                             <div className="flex items-center justify-between px-2">
                                 <div className="flex items-center gap-2">

@@ -33,14 +33,14 @@ export function PipelineView() {
     return (
         <div className="flex flex-col gap-6">
             {/* Status Tabs */}
-            <div className="flex border-b border-gray-100 pb-2">
-                <div className="flex gap-2 w-full">
+            <div className="flex border-b border-gray-100 pb-2 overflow-x-auto no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+                <div className="flex gap-2 min-w-max sm:w-full">
                     {statuses.map((status) => (
                         <button
                             key={status.id}
                             onClick={() => setActiveStatus(status.id as Lead['status'])}
                             className={clsx(
-                                "flex-1 px-6 py-3 rounded-t-2xl text-sm font-bold transition-all flex items-center justify-center gap-2 border-b-2 relative",
+                                "flex-1 px-4 sm:px-6 py-3 rounded-t-2xl text-xs sm:text-sm font-bold transition-all flex items-center justify-center gap-2 border-b-2 relative whitespace-nowrap",
                                 activeStatus === status.id
                                     ? "text-black border-[#1B1B19] bg-gray-50"
                                     : "text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50/50"
@@ -60,11 +60,11 @@ export function PipelineView() {
             </div>
 
             {/* Type Kanban */}
-            <div className="flex gap-6 h-[calc(100vh-320px)] pb-4 no-scrollbar">
+            <div className="flex gap-4 sm:gap-6 h-[calc(100vh-320px)] pb-4 overflow-x-auto snap-x snap-mandatory no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
                 {typeColumns.map((column) => (
                     <div
                         key={column.id}
-                        className="flex-1 flex flex-col gap-4 rounded-2xl border border-gray-200/50 bg-white/40 p-4 h-full overflow-hidden"
+                        className="w-[85vw] sm:flex-1 flex flex-col gap-4 rounded-2xl border border-gray-200/50 bg-white/40 p-4 h-full overflow-hidden shrink-0 snap-center"
                     >
                         <div className="px-6 py-5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                             <div className="flex items-center gap-2">

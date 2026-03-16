@@ -72,14 +72,14 @@ export function UsersView() {
 
     return (
         <div className="flex flex-col gap-8">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                 <div className="flex flex-col gap-1">
-                    <h2 className="text-2xl font-bold text-gray-900 tracking-tight">Manage team users</h2>
-                    <p className="text-sm text-gray-500">Configure system settings and manage team users.</p>
+                    <h2 className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">Manage team users</h2>
+                    <p className="text-xs sm:text-sm text-gray-500">Configure system settings and manage team users.</p>
                 </div>
                 <button
                     onClick={openAddModal}
-                    className="flex items-center gap-2 rounded-xl bg-[#1B1B19] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-gray-200 hover:bg-black transition-all active:scale-95"
+                    className="flex items-center justify-center gap-2 rounded-xl bg-[#1B1B19] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-gray-200 hover:bg-black transition-all active:scale-95 w-full sm:w-auto"
                 >
                     <UserPlus size={18} />
                     Add Sales Rep
@@ -87,7 +87,8 @@ export function UsersView() {
             </div>
 
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden z-10">
-                <div className="overflow-x-auto">
+                {/* Desktop view table */}
+                <div className="hidden sm:block overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100 bg-gray-50/50">
@@ -144,6 +145,47 @@ export function UsersView() {
                             )}
                         </tbody>
                     </table>
+                </div>
+
+                {/* Mobile view cards */}
+                <div className="sm:hidden divide-y divide-gray-100">
+                    {users.map((user) => (
+                        <div key={user._id} className="p-4 flex flex-col gap-4">
+                            <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-3">
+                                    <div className="h-10 w-10 rounded-full bg-gray-50 flex items-center justify-center text-[#1B1B19] font-bold uppercase border border-gray-100">
+                                        {user.username?.charAt(0) || 'U'}
+                                    </div>
+                                    <div className="flex flex-col">
+                                        <span className="font-bold text-gray-900">{user.username}</span>
+                                        <div className="flex items-center gap-1.5 text-xs font-medium text-gray-500">
+                                            <Shield size={12} className="text-gray-400" />
+                                            <span className="capitalize">{user.role}</span>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div className="flex gap-2">
+                                    <button
+                                        onClick={() => openEditModal(user)}
+                                        className="p-2.5 text-gray-600 bg-gray-50 border border-gray-100 rounded-xl transition-colors active:bg-gray-100"
+                                    >
+                                        <Edit2 size={18} />
+                                    </button>
+                                    <button
+                                        onClick={() => handleDeleteUser(user._id, user.username)}
+                                        className="p-2.5 text-red-600 bg-red-50 border border-red-100 rounded-xl transition-colors active:bg-red-100"
+                                    >
+                                        <Trash2 size={18} />
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    ))}
+                    {users.length === 0 && (
+                        <div className="px-6 py-12 text-center text-sm text-gray-400 italic bg-gray-50/50">
+                            No users found. Add your first team member!
+                        </div>
+                    )}
                 </div>
             </div>
 
