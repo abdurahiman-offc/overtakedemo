@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { isSameDay } from 'date-fns';
 import { Lead, SmartList, User, Tag, FollowupRecord } from '../types';
-import { useNotifications } from './NotificationContext';
 
 interface LeadsContextType {
     leads: Lead[];
@@ -10,10 +9,14 @@ interface LeadsContextType {
     tags: Tag[];
     loading: boolean;
     error: string | null;
+    apiLeads: Lead[];
     fetchLeads: () => Promise<void>;
     addLead: (lead: Partial<Lead>) => Promise<void>;
     updateLead: (id: string, updates: Partial<Lead>) => Promise<void>;
     deleteLead: (id: string) => Promise<void>;
+    updateApiLead: (id: string, updates: Partial<Lead>) => Promise<void>;
+    deleteApiLead: (id: string) => Promise<void>;
+    approveApiLead: (id: string) => Promise<void>;
     addUser: (user: Partial<User>) => Promise<void>;
     updateUser: (id: string, updates: Partial<User>) => Promise<void>;
     deleteUser: (id: string) => Promise<void>;
@@ -31,22 +34,23 @@ const LeadsContext = createContext<LeadsContextType | undefined>(undefined);
 
 export function LeadsProvider({ children }: { children: React.ReactNode }) {
     const [leads, setLeads] = useState<Lead[]>([]);
+    const [apiLeads, setApiLeads] = useState<Lead[]>([]);
     const [users, setUsers] = useState<User[]>([]);
     const [smartLists, setSmartLists] = useState<SmartList[]>([]);
     const [tags, setTags] = useState<Tag[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
-    const { addNotification } = useNotifications();
     const isFirstLoad = useRef(true);
 
-    const fetchData = async () => {
+    const fetchData = async (silent = false) => {
         try {
-            setLoading(true);
-            const [leadsRes, usersRes, listsRes, tagsRes] = await Promise.all([
+            if (!silent) setLoading(true);
+            const [leadsRes, usersRes, listsRes, tagsRes, apiLeadsRes] = await Promise.all([
                 fetch('/api/leads'),
                 fetch('/api/users'),
                 fetch('/api/smartlists'),
-                fetch('/api/tags')
+                fetch('/api/tags'),
+                fetch('/api/api-leads')
             ]);
 
             if (leadsRes.ok) {
@@ -63,6 +67,19 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
 
                 setLeads(mappedLeads);
             }
+            if (apiLeadsRes.ok) {
+                const fetchedApiLeads = await apiLeadsRes.json();
+                const mappedApiLeads = fetchedApiLeads.map((l: Record<string, unknown>) => ({
+                    ...l,
+                    isApiLead: true, // helpful flag
+                    tags: l.tags || [],
+                    carDetails: l.carDetails || [],
+                    phone: l.phone || 'Unknown',
+                    assignmentHistory: l.assignmentHistory || [],
+                    followupHistory: l.followupHistory || []
+                } as unknown as Lead));
+                setApiLeads(mappedApiLeads);
+            }
             if (usersRes.ok) {
                 const fetchedUsers = await usersRes.json();
                 setUsers(fetchedUsers.map((u: Record<string, unknown>) => ({
@@ -75,10 +92,12 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
             setError(null);
         } catch (err: unknown) {
             const message = err instanceof Error ? err.message : 'An unknown error occurred';
-            console.error('Failed to fetch data', message);
-            setError(message);
+            if (!silent) {
+                console.error('Failed to fetch data', message);
+                setError(message);
+            }
         } finally {
-            setLoading(false);
+            if (!silent) setLoading(false);
         }
     };
 
@@ -87,6 +106,13 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
             fetchData();
             isFirstLoad.current = false;
         }
+
+        // Live Update Polling (every 10 seconds)
+        const intervalId = setInterval(() => {
+            fetchData(true);
+        }, 10000);
+
+        return () => clearInterval(intervalId);
     }, []);
 
     const addLead = async (leadData: Partial<Lead>) => {
@@ -97,10 +123,14 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
                 body: JSON.stringify(leadData)
             });
             if (res.ok) {
-                addNotification(`New lead created: ${leadData.name}`, 'success');
-                await fetchData(); // Refresh to get populated refs
+                await fetchData();
+            } else {
+                const errorData = await res.json();
+                console.error('Failed to add lead', errorData);
             }
-        } catch (err) { console.error('Error adding lead', err); }
+        } catch (err) { 
+            console.error('Error adding lead', err);
+        }
     };
 
     const updateLead = async (id: string, updates: Partial<Lead>) => {
@@ -112,8 +142,13 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
             });
             if (res.ok) {
                 await fetchData();
+            } else {
+                const errorData = await res.json();
+                console.error('Failed to update lead', errorData);
             }
-        } catch (err) { console.error('Error updating lead', err); }
+        } catch (err) { 
+            console.error('Error updating lead', err);
+        }
     };
 
     const deleteLead = async (id: string) => {
@@ -123,6 +158,45 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
                 setLeads(prev => prev.filter(l => l._id !== id));
             }
         } catch (err) { console.error('Error deleting lead', err); }
+    };
+
+    const updateApiLead = async (id: string, updates: Partial<Lead>) => {
+        try {
+            const res = await fetch(`/api/api-leads/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (res.ok) {
+                await fetchData();
+            } else {
+                const errorData = await res.json();
+                console.error('Failed to update API lead', errorData);
+            }
+        } catch (err) { 
+            console.error('Error updating api lead', err);
+        }
+    };
+
+    const deleteApiLead = async (id: string) => {
+        try {
+            const res = await fetch(`/api/api-leads/${id}`, { method: 'DELETE' });
+            if (res.ok) {
+                setApiLeads(prev => prev.filter(l => l._id !== id));
+            }
+        } catch (err) { console.error('Error deleting api lead', err); }
+    };
+
+    const approveApiLead = async (id: string) => {
+        try {
+            const res = await fetch(`/api/api-leads/${id}/approve`, { method: 'POST' });
+            if (res.ok) {
+                await fetchData(); // Fetches updated leads and api-leads
+            } else {
+                const error = await res.json();
+                console.error('Failed to approve API lead', error);
+            }
+        } catch (err) { console.error('Error approving api lead', err); }
     };
 
     const addUser = async (userData: Partial<User>) => {
@@ -135,8 +209,13 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
             if (res.ok) {
                 const newUser = await res.json();
                 setUsers(prev => [newUser, ...prev]);
+            } else {
+                const errorData = await res.json();
+                console.error('Failed to add user', errorData);
             }
-        } catch (err) { console.error('Error adding user', err); }
+        } catch (err) { 
+            console.error('Error adding user', err);
+        }
     };
 
     const updateUser = async (id: string, updates: Partial<User>) => {
@@ -271,8 +350,9 @@ export function LeadsProvider({ children }: { children: React.ReactNode }) {
 
     return (
         <LeadsContext.Provider value={{
-            leads, users, smartLists, tags, loading, error,
+            leads, apiLeads, users, smartLists, tags, loading, error,
             fetchLeads: fetchData, addLead, updateLead, deleteLead,
+            updateApiLead, deleteApiLead, approveApiLead,
             addUser, updateUser, deleteUser, addSmartList, deleteSmartList,
             addTag, deleteTag,
             bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads,

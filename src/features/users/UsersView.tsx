@@ -68,10 +68,10 @@ export function UsersView() {
                 </div>
                 <button
                     onClick={openAddModal}
-                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-6 py-3 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all active:scale-95"
+                    className="flex items-center gap-2 rounded-xl bg-[#1B1B19] px-6 py-3 text-sm font-bold text-white shadow-lg shadow-gray-200 hover:bg-black transition-all active:scale-95"
                 >
                     <UserPlus size={18} />
-                    Add User
+                    Add Sales Rep
                 </button>
             </div>
 
@@ -90,7 +90,7 @@ export function UsersView() {
                                 <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="h-10 w-10 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold uppercase">
+                                            <div className="h-10 w-10 rounded-full bg-gray-100 flex items-center justify-center text-[#1B1B19] font-bold uppercase">
                                                 {user.username?.charAt(0) || 'U'}
                                             </div>
                                             <div className="flex flex-col">
@@ -100,7 +100,7 @@ export function UsersView() {
                                     </td>
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-1.5 text-sm font-medium text-gray-700">
-                                            <Shield size={14} className="text-indigo-500" />
+                                            <Shield size={14} className="text-[#1B1B19]" />
                                             <span className="capitalize">{user.role}</span>
                                         </div>
                                     </td>
@@ -108,7 +108,7 @@ export function UsersView() {
                                         <div className="flex justify-end gap-2">
                                             <button
                                                 onClick={() => openEditModal(user)}
-                                                className="p-2 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                                                 title="Edit User"
                                             >
                                                 <Edit2 size={16} />
@@ -141,7 +141,7 @@ export function UsersView() {
                 <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-gray-50/70 p-4">
                     <div className="w-full max-w-md flex flex-col overflow-hidden rounded-2xl bg-white border border-gray-100 shadow-2xl animate-fadeIn">
                         <div className="flex items-center justify-between border-b border-gray-100/50 px-6 py-5">
-                            <h2 className="text-xl font-bold text-gray-900">{editingUser ? 'Edit User' : 'Add New User'}</h2>
+                            <h2 className="text-xl font-bold text-gray-900">{editingUser ? 'Edit Sales Rep' : 'Add New Sales Rep'}</h2>
                             <button onClick={() => setIsUserModalOpen(false)} className="rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-900">
                                 <X size={20} />
                             </button>
@@ -156,24 +156,19 @@ export function UsersView() {
                                         setUserFormData({ ...userFormData, username: e.target.value });
                                         if (error) setError('');
                                     }}
-                                    className={`rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all placeholder-gray-400 ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-indigo-500 focus:ring-indigo-100'}`}
+                                    className={`rounded-xl border px-4 py-3 text-sm focus:outline-none focus:ring-2 transition-all placeholder-gray-400 ${error ? 'border-red-500 focus:border-red-500 focus:ring-red-100' : 'border-gray-200 focus:border-[#1B1B19] focus:ring-gray-100'}`}
                                     placeholder="johndoe"
                                 />
                                 {error && <span className="text-[10px] font-bold text-red-500 uppercase px-1">{error}</span>}
                             </div>
 
 
-                            <div className="flex flex-col gap-1.5">
+                            <div className="flex flex-col gap-1.5 opacity-60">
                                 <label className="text-sm font-semibold text-gray-700">Role</label>
-                                <select
-                                    value={userFormData.role}
-                                    onChange={(e) => setUserFormData({ ...userFormData, role: e.target.value as 'admin' | 'manager' | 'sales' })}
-                                    className="rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-100"
-                                >
-                                    <option value="admin">Admin</option>
-                                    <option value="manager">Manager</option>
-                                    <option value="sales">Sales</option>
-                                </select>
+                                <div className="rounded-xl border border-gray-100 bg-gray-50 px-4 py-3 text-sm font-medium text-gray-500 flex items-center gap-2">
+                                    <Shield size={16} className="text-gray-400" />
+                                    Sales Representative (Static)
+                                </div>
                             </div>
 
                             <div className="mt-4 flex justify-end gap-3 border-t border-gray-100/50 pt-6">
@@ -186,10 +181,10 @@ export function UsersView() {
                                 </button>
                                 <button
                                     type="submit"
-                                    className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-indigo-200 hover:bg-indigo-700"
+                                    className="flex items-center gap-2 rounded-xl bg-[#1B1B19] px-8 py-2.5 text-sm font-bold text-white shadow-lg shadow-gray-200 hover:bg-black"
                                 >
                                     <Save size={18} />
-                                    {editingUser ? 'Update User' : 'Save User'}
+                                    {editingUser ? 'Update Rep' : 'Save Rep'}
                                 </button>
                             </div>
                         </form>

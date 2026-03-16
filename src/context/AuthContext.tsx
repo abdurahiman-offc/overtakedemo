@@ -1,46 +1,69 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 
+import { User } from '../types';
+
 interface AuthContextType {
+    user: User | null;
     isAdmin: boolean;
-    login: (password: string) => boolean;
+    login: (username: string, password?: string) => Promise<boolean>;
     logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-    const [isAdmin, setIsAdmin] = useState<boolean>(() => {
+    const [user, setUser] = useState<User | null>(() => {
         // Hydrate from local storage on initial load
         if (typeof window !== 'undefined') {
-            return localStorage.getItem('isAdminLoggedIn') === 'true';
+            const storedUser = localStorage.getItem('authUser');
+            if (storedUser) {
+                try {
+                    return JSON.parse(storedUser);
+                } catch (e) {
+                    return null;
+                }
+            }
         }
-        return false;
+        return null;
     });
+
+    const isAdmin = user?.role === 'admin';
 
     useEffect(() => {
         // Persist to local storage
-        if (isAdmin) {
-            localStorage.setItem('isAdminLoggedIn', 'true');
+        if (user) {
+            localStorage.setItem('authUser', JSON.stringify(user));
         } else {
-            localStorage.removeItem('isAdminLoggedIn');
+            localStorage.removeItem('authUser');
         }
-    }, [isAdmin]);
+    }, [user]);
 
-    const login = (password: string) => {
-        // Hardcoded demo password: just checking for "admin"
-        if (password.trim() === 'admin') {
-            setIsAdmin(true);
-            return true;
+    const login = async (username: string, password?: string) => {
+        try {
+            const res = await fetch('/api/auth/login', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username: username.trim(), password: password?.trim() })
+            });
+
+            if (res.ok) {
+                const authenticatedUser = await res.json();
+                setUser(authenticatedUser);
+                return true;
+            }
+            return false;
+        } catch (error) {
+            console.error('Login error:', error);
+            return false;
         }
-        return false;
     };
 
     const logout = () => {
-        setIsAdmin(false);
+        setUser(null);
     };
 
     return (
-        <AuthContext.Provider value={{ isAdmin, login, logout }}>
+        <AuthContext.Provider value={{ user, isAdmin, login, logout }}>
             {children}
         </AuthContext.Provider>
     );

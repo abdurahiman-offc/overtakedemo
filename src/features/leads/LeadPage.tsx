@@ -9,7 +9,49 @@ export function LeadPage() {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-    const { leads, users, deleteLead, completeFollowup } = useLeads();
+    const { leads, users, deleteLead, completeFollowup, updateLead } = useLeads();
+    const [generalNote, setGeneralNote] = useState('');
+    const [followupNoteInputPage, setFollowupNoteInputPage] = useState('');
+    const [newFollowupDate, setNewFollowupDate] = useState('');
+
+    const handleAddGeneralNote = async () => {
+        if (!generalNote.trim() || !id) return;
+        const currentLead = leads.find(l => l._id === id);
+        if (!currentLead) return;
+        
+        const noteWithDateLine = `${format(new Date(), 'EEEE, do MMMM yyyy')} - ${generalNote.trim()}`;
+        
+        await updateLead(id, {
+            notes: [...(currentLead.notes || []), noteWithDateLine]
+        });
+        setGeneralNote('');
+    };
+
+    const handleAddFollowupNotePage = async () => {
+        if (!followupNoteInputPage.trim() || !id) return;
+        const currentLead = leads.find(l => l._id === id);
+        if (!currentLead) return;
+
+        const noteWithDateLine = `${format(new Date(), 'EEEE, do MMMM yyyy')} - ${followupNoteInputPage.trim()}`;
+        
+        await updateLead(id, {
+            followupNote: [...(currentLead.followupNote || []), noteWithDateLine]
+        });
+        setFollowupNoteInputPage('');
+    };
+
+    const handleAddFollowupNote = async (result: 'responded' | 'not_responded') => {
+        if (!id) return;
+        await completeFollowup(id, "", result);
+    };
+
+    const handleScheduleMeeting = async () => {
+        if (!newFollowupDate || !id) return;
+        await updateLead(id, {
+            followupDate: newFollowupDate
+        });
+        setNewFollowupDate('');
+    };
 
     const lead = leads.find(l => l._id === id);
 
@@ -50,7 +92,7 @@ export function LeadPage() {
     if (!leads.length) {
         return (
             <div className="flex items-center justify-center min-h-[400px]">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-[#1B1B19]"></div>
             </div>
         );
     }
@@ -96,10 +138,10 @@ export function LeadPage() {
             </div>
 
             {/* Top Contact Header (CRM Style) */}
-            <div className="flex flex-col lg:flex-row justify-between lg:items-center rounded-2xl border border-gray-200 bg-white shadow-sm p-6 gap-6 relative overflow-hidden">
-                <div className="absolute top-0 left-0 w-1.5 h-full bg-indigo-500"></div>
+            <div className="flex flex-col lg:flex-row justify-between lg:items-center rounded-2xl border border-gray-200 bg-white shadow-sm p-6 gap-6 relative overflow-hidden shrink-0 min-h-[160px]">
+                <div className="absolute top-0 left-0 w-1.5 h-full bg-[#1B1B19]"></div>
                 <div className="flex flex-col sm:flex-row sm:items-center gap-6">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-50 text-2xl font-bold text-indigo-600 shrink-0">
+                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-gray-100 text-2xl font-bold text-[#1B1B19] shrink-0">
                         {lead.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="flex flex-col gap-2">
@@ -115,15 +157,15 @@ export function LeadPage() {
                         {/* Contact Info Moved to Top */}
                         <div className="flex flex-wrap items-center gap-4 mt-1">
                             <div className="flex items-center gap-1.5 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                                <Phone size={14} className="text-indigo-400" />
+                                <Phone size={14} className="text-gray-400" />
                                 <span className="text-sm font-medium">{lead.phone}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                                <MapPin size={14} className="text-indigo-400" />
+                                <MapPin size={14} className="text-gray-400" />
                                 <span className="text-sm font-medium">{lead.place || "None"}</span>
                             </div>
                             <div className="flex items-center gap-1.5 text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100">
-                                <Briefcase size={14} className="text-indigo-400" />
+                                <Briefcase size={14} className="text-gray-400" />
                                 <span className="text-sm font-medium">{lead.designation || "None"}</span>
                             </div>
                             {lead.paymentStatus && (
@@ -139,7 +181,7 @@ export function LeadPage() {
                 <div className="flex items-center gap-3 w-full lg:w-auto mt-2 lg:mt-0">
                     <button
                         onClick={() => setIsEditModalOpen(true)}
-                        className="flex-1 lg:flex-none flex items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-sm font-bold text-white shadow-md transition-colors hover:bg-indigo-700"
+                        className="flex-1 lg:flex-none flex items-center justify-center gap-2 rounded-xl bg-[#1B1B19] px-5 py-2.5 text-sm font-bold text-white shadow-md transition-colors hover:bg-black"
                     >
                         <Edit3 size={16} />
                         Edit Lead
@@ -160,18 +202,18 @@ export function LeadPage() {
                 {/* Left Area (Meta & Vehicle Preferences) */}
                 <div className="lg:col-span-2 flex flex-col gap-6">
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6 shrink-0">
                         {/* About Lead Card */}
-                        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden h-full">
+                        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                             <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3.5 flex items-center gap-2">
                                 <User size={16} className="text-gray-500" />
                                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">About this Lead</h3>
                             </div>
                             <div className="flex flex-col p-5 gap-4">
                                 <div className="flex flex-col gap-1.5">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Assigned Owner</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-700">Assigned Owner</span>
                                     <div className="font-medium text-sm text-gray-900 flex items-center gap-2">
-                                        <div className="w-7 h-7 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center text-[10px] font-bold border border-indigo-200">
+                                        <div className="w-7 h-7 rounded-full bg-gray-100 text-[#1B1B19] flex items-center justify-center text-[10px] font-bold border border-gray-200">
                                             {(typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'U')?.charAt(0).toUpperCase()}
                                         </div>
                                         {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Unassigned'}
@@ -179,19 +221,19 @@ export function LeadPage() {
                                 </div>
                                 <div className="w-full h-px bg-gray-100"></div>
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Lead Source / Origin</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-700">Lead Source / Origin</span>
                                     <span className="font-medium text-sm text-gray-900 bg-gray-50 self-start px-2.5 py-1 rounded-md border border-gray-200">{lead.leadOrigin}</span>
                                 </div>
                                 <div className="w-full h-px bg-gray-100"></div>
                                 <div className="flex flex-col gap-1">
-                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-400">Created Date</span>
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-gray-700">Created Date</span>
                                     <span className="font-bold text-sm text-gray-900">{formatDate(lead.createdAt)}</span>
                                 </div>
                             </div>
                         </div>
 
                         {/* Tags Card */}
-                        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden h-full">
+                        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
                             <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3.5 flex items-center gap-2">
                                 <Tag size={16} className="text-gray-500" />
                                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">Tags</h3>
@@ -206,14 +248,14 @@ export function LeadPage() {
                                         ))}
                                     </div>
                                 ) : (
-                                    <span className="text-xs text-gray-400 italic">No tags added yet.</span>
+                                    <span className="text-xs text-gray-700 italic">No tags added yet.</span>
                                 )}
                             </div>
                         </div>
                     </div>
 
                     {/* Vehicle Preferences */}
-                    <div className="flex flex-col gap-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div className="flex flex-col gap-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0">
                         <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 flex items-center gap-2">
                             <Car size={18} className="text-gray-500" />
                             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Vehicle Preferences</h3>
@@ -249,7 +291,7 @@ export function LeadPage() {
                                                         <div className="flex flex-col gap-3">
                                                             {/* Trading In */}
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Trading In:</span>
+                                                                <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest mb-1">Trading In:</span>
                                                                 <div className="font-bold text-gray-900 text-base">{car.ownedCar?.brandName} {car.ownedCar?.modelName}</div>
                                                                 <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-gray-600 font-medium">
                                                                     {car.ownedCar?.fuelType && <span className="bg-gray-100 px-2 py-0.5 rounded-md">{car.ownedCar.fuelType}</span>}
@@ -267,7 +309,7 @@ export function LeadPage() {
 
                                                             {/* Buying */}
                                                             <div className="flex flex-col">
-                                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-1">Looking For:</span>
+                                                                <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest mb-1">Looking For:</span>
                                                                 <div className="font-bold text-blue-900 text-base">{car.wantedCar?.brandName} {car.wantedCar?.modelName}</div>
                                                                 <div className="flex flex-wrap items-center gap-2 mt-1 text-xs text-blue-700 font-medium">
                                                                     {car.wantedCar?.fuelType && <span className="bg-blue-50 px-2 py-0.5 rounded-md border border-blue-100">{car.wantedCar.fuelType}</span>}
@@ -330,52 +372,82 @@ export function LeadPage() {
                 <div className="lg:col-span-1 flex flex-col gap-6">
 
                     {/* General Notes */}
-                    {lead.notes && lead.notes.length > 0 && (
-                        <div className="flex flex-col gap-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
-                            <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 flex items-center gap-2">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">General Notes</h3>
-                            </div>
-                            <div className="p-6 flex flex-col gap-4">
-                                {lead.notes.map((note, idx) => (
-                                    <div key={idx} className="rounded-xl bg-blue-50/30 p-5 text-sm text-gray-800 border border-blue-100 shadow-sm relative">
-                                        <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-blue-300 rounded-l-xl"></div>
-                                        <p className="leading-relaxed pl-2 whitespace-pre-wrap">{note}</p>
-                                    </div>
-                                ))}
-                            </div>
+                    <div className="flex flex-col gap-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0">
+                        <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 flex items-center justify-between">
+                            <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">General Notes</h3>
                         </div>
-                    )}
+                        <div className="p-6 flex flex-col gap-4">
+                            <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                <textarea
+                                    value={generalNote}
+                                    onChange={(e) => setGeneralNote(e.target.value)}
+                                    placeholder="Type a general note about this lead..."
+                                    className="w-full min-h-[80px] p-3 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#1B1B19]/10 focus:border-[#1B1B19] outline-none transition-all resize-none"
+                                />
+                                <button
+                                    onClick={handleAddGeneralNote}
+                                    disabled={!generalNote.trim()}
+                                    className="self-end px-4 py-2 bg-[#1B1B19] text-white text-xs font-bold rounded-lg hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                >
+                                    Add General Note
+                                </button>
+                            </div>
+
+                            {lead.notes && lead.notes.length > 0 && (
+                                <div className="flex flex-col gap-4 mt-2">
+                                    {lead.notes.map((note, idx) => (
+                                        <div key={idx} className="rounded-xl bg-blue-50/30 p-5 text-sm text-gray-800 border border-blue-100 shadow-sm relative">
+                                            <div className="absolute top-0 left-0 bottom-0 w-1.5 bg-blue-300 rounded-l-xl"></div>
+                                            <p className="leading-relaxed pl-2 whitespace-pre-wrap">{note}</p>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
 
                     {/* Follow-up Activity & Notes */}
-                    <div className="flex flex-col gap-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                    <div className="flex flex-col gap-0 rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0">
                         <div className="border-b border-gray-100 bg-gray-50/50 px-6 py-4 flex items-center gap-2">
                             <History size={18} className="text-gray-500" />
                             <h3 className="text-sm font-bold text-gray-900 uppercase tracking-widest">Activity & Follow-ups</h3>
                         </div>
                         <div className="p-6 flex flex-col gap-6">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-4">
-                                <div className={`flex flex-col gap-2 p-5 rounded-xl border shadow-sm hover:shadow-md transition-shadow relative ${isMissed(lead.followupDate) ? 'bg-red-50 border-red-100' : 'bg-indigo-50/50 border-indigo-100'}`}>
-                                    <span className={`text-[10px] font-bold uppercase tracking-widest ${isMissed(lead.followupDate) ? 'text-red-500' : 'text-indigo-500'}`}>Next Scheduled Follow-up</span>
-                                    <div className={`flex items-center gap-2 ${isMissed(lead.followupDate) ? 'text-red-900' : 'text-indigo-900'}`}>
-                                        <Calendar size={20} className={isMissed(lead.followupDate) ? 'text-red-600' : 'text-indigo-600'} />
-                                        <span className="font-bold text-xl">{formatDate(lead.followupDate)}</span>
+                                <div className={`flex flex-col gap-4 p-5 rounded-xl border shadow-sm hover:shadow-md transition-shadow relative ${isMissed(lead.followupDate) ? 'bg-red-50 border-red-100' : 'bg-indigo-50/50 border-indigo-100'}`}>
+                                    <div className="flex items-center justify-between">
+                                        <span className={`text-[10px] font-bold uppercase tracking-widest ${isMissed(lead.followupDate) ? 'text-red-500' : 'text-indigo-500'}`}>Next Scheduled Follow-up</span>
+                                        {isMissed(lead.followupDate) && <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-0.5 rounded-full uppercase tracking-tighter">Missed</span>}
                                     </div>
-                                    {lead.followupDate && (
-                                        <div className="flex gap-2 mt-4">
-                                            <button
-                                                onClick={() => completeFollowup(lead._id, undefined, 'responded')}
-                                                className={`flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-all shadow-sm ${isMissed(lead.followupDate) ? 'bg-red-600 text-white hover:bg-red-700' : 'bg-indigo-600 text-white hover:bg-indigo-700'}`}
-                                            >
-                                                <CheckCircle2 size={14} /> Mark as Completed
-                                            </button>
-                                            <button
-                                                onClick={() => completeFollowup(lead._id, undefined, 'not_responded')}
-                                                className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all shadow-sm"
-                                            >
-                                                <X size={14} /> Not Responded
-                                            </button>
+                                    
+                                    <div className="flex flex-col gap-3">
+                                        <div className={`flex items-center gap-2 ${isMissed(lead.followupDate) ? 'text-red-900' : 'text-indigo-900'}`}>
+                                            <Calendar size={20} className={isMissed(lead.followupDate) ? 'text-red-600' : 'text-indigo-600'} />
+                                            <span className="font-bold text-xl">{formatDate(lead.followupDate)}</span>
                                         </div>
-                                    )}
+
+                                        {/* Schedule Meeting / Reschedule */}
+                                        {!lead.followupDate && (
+                                            <div className="flex flex-col gap-2 pt-2 border-t border-indigo-100/50 mt-1">
+                                                <span className="text-[10px] font-bold text-gray-500 uppercase tracking-widest">Schedule New Meeting</span>
+                                                <div className="flex gap-2">
+                                                    <input
+                                                        type="date"
+                                                        value={newFollowupDate}
+                                                        onChange={(e) => setNewFollowupDate(e.target.value)}
+                                                        className="flex-1 px-3 py-1.5 text-xs rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#1B1B19]/10 focus:border-[#1B1B19] outline-none transition-all shadow-sm"
+                                                    />
+                                                    <button
+                                                        onClick={handleScheduleMeeting}
+                                                        disabled={!newFollowupDate}
+                                                        className="px-3 py-1.5 bg-[#1B1B19] text-white text-[10px] font-bold rounded-lg hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm uppercase tracking-tighter"
+                                                    >
+                                                        Schedule
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                                 <div className="flex flex-col gap-2 bg-emerald-50/50 p-5 rounded-xl border border-emerald-100 shadow-sm hover:shadow-md transition-shadow">
                                     <span className="text-[10px] font-bold uppercase tracking-widest text-emerald-600">Total Interactions</span>
@@ -383,6 +455,46 @@ export function LeadPage() {
                                         <History size={20} className="text-emerald-600" />
                                         <span className="font-bold text-xl">{lead.followupCount} interactions</span>
                                     </div>
+                                </div>
+                            </div>
+
+                            {/* Follow-up Note & Action */}
+                            {lead.followupDate && (
+                                <div className="flex flex-col gap-3 p-5 bg-amber-50/30 rounded-xl border border-amber-100 shadow-sm">
+                                    <span className="text-[10px] font-bold uppercase tracking-widest text-amber-600">Complete Follow-up Action</span>
+                                    <div className="flex gap-2">
+                                        <button
+                                            onClick={() => handleAddFollowupNote('responded')}
+                                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-[#1B1B19] text-white hover:bg-black transition-all shadow-sm uppercase"
+                                        >
+                                            <CheckCircle2 size={14} /> Responded
+                                        </button>
+                                        <button
+                                            onClick={() => handleAddFollowupNote('not_responded')}
+                                            className="flex-1 flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold bg-white text-gray-600 border border-gray-200 hover:bg-gray-50 transition-all shadow-sm uppercase"
+                                        >
+                                            <X size={14} /> Not Responded
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {/* Standalone Follow-up Note Input */}
+                            <div className="flex flex-col gap-4 pt-4 border-t border-gray-100">
+                                <div className="flex flex-col gap-3 p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                    <textarea
+                                        value={followupNoteInputPage}
+                                        onChange={(e) => setFollowupNoteInputPage(e.target.value)}
+                                        placeholder="Type a follow-up note without changing status..."
+                                        className="w-full min-h-[80px] p-3 text-sm rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#1B1B19]/10 focus:border-[#1B1B19] outline-none transition-all resize-none"
+                                    />
+                                    <button
+                                        onClick={handleAddFollowupNotePage}
+                                        disabled={!followupNoteInputPage.trim()}
+                                        className="self-end px-4 py-2 bg-[#1B1B19] text-white text-xs font-bold rounded-lg hover:bg-black transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-sm"
+                                    >
+                                        Add Follow-up Note
+                                    </button>
                                 </div>
                             </div>
 
@@ -396,7 +508,7 @@ export function LeadPage() {
                                                 <div className={`absolute top-0 left-0 bottom-0 w-1 ${record.wasMissed ? 'bg-red-400' : 'bg-gray-300'} rounded-l-xl`}></div>
                                                 <div className="flex flex-col gap-1 pl-2">
                                                     <div className="flex items-center justify-between">
-                                                        <span className="text-[10px] font-bold uppercase text-gray-400">
+                                                        <span className="text-[10px] font-bold uppercase text-gray-700">
                                                             {record.result === 'rescheduled' ? 'Rescheduled' : `Scheduled: ${formatDate(record.scheduledDate)}`}
                                                         </span>
                                                         <span className={`text-[10px] font-bold uppercase ${record.result === 'not_responded' ? 'text-orange-500' : record.result === 'rescheduled' ? 'text-blue-500' : record.wasMissed ? 'text-red-500' : 'text-emerald-500'}`}>
@@ -406,12 +518,12 @@ export function LeadPage() {
                                                     {record.result === 'rescheduled' ? (
                                                         <div className="flex flex-col gap-1">
                                                             <div className="flex items-center gap-2 text-gray-900 font-bold">
-                                                                <span className="text-gray-400 line-through text-xs">{formatDate(record.scheduledDate)}</span>
-                                                                <span className="text-gray-400 text-[10px]">→</span>
+                                                                <span className="text-gray-700 line-through text-xs">{formatDate(record.scheduledDate)}</span>
+                                                                <span className="text-gray-700 text-[10px]">→</span>
                                                                 <span>{formatDate(record.newScheduledDate)}</span>
                                                             </div>
                                                             <div className="flex items-center justify-between">
-                                                                <span className="text-[10px] text-gray-400 italic">Changed on: {formatDate(record.completedDate)}</span>
+                                                                <span className="text-[10px] text-gray-700 italic">Changed on: {formatDate(record.completedDate)}</span>
                                                                 {record.userId && (
                                                                     <span className="text-[10px] text-indigo-400 font-medium italic">by {users.find(u => u._id === record.userId)?.username || 'Unknown'}</span>
                                                                 )}
@@ -451,7 +563,7 @@ export function LeadPage() {
 
                     {/* Assignment History */}
                     {lead.assignmentHistory && lead.assignmentHistory.length > 0 && (
-                        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden">
+                        <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm overflow-hidden shrink-0">
                             <div className="border-b border-gray-100 bg-gray-50/50 px-5 py-3.5 flex items-center gap-2">
                                 <History size={16} className="text-gray-500" />
                                 <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">Assignment History</h3>
@@ -460,10 +572,10 @@ export function LeadPage() {
                                 <div className="flex flex-col gap-0 border-l-2 border-indigo-100 ml-2">
                                     {lead.assignmentHistory.map((record, idx) => (
                                         <div key={idx} className="relative pl-5 pb-6 last:pb-0">
-                                            <div className="absolute left-[-5px] top-1 h-2 w-2 rounded-full bg-indigo-500 ring-4 ring-white"></div>
+                                            <div className="absolute left-[-5px] top-1 h-2 w-2 rounded-full bg-[#1B1B19] ring-4 ring-white"></div>
                                             <div className="flex flex-col">
                                                 <span className="font-bold text-gray-900 text-sm leading-none">{record.userId?.username || 'Unknown User'}</span>
-                                                <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest mt-1.5">{formatDate(record.assignedAt)}</span>
+                                                <span className="text-[10px] font-bold text-gray-700 uppercase tracking-widest mt-1.5">{formatDate(record.assignedAt)}</span>
                                             </div>
                                         </div>
                                     ))}

@@ -3,6 +3,7 @@ import Lead from '../models/Lead.js';
 import User from '../models/User.js';
 import SmartList from '../models/SmartList.js';
 import Tag from '../models/Tag.js';
+import ApiLead from '../models/ApiLead.js';
 
 const router = express.Router();
 
@@ -35,6 +36,47 @@ router.delete('/users/:id', async (req, res, next) => {
         const user = await User.findByIdAndDelete(req.params.id);
         if (!user) return res.status(404).json({ message: 'User not found' });
         res.json({ message: 'User deleted successfully' });
+    } catch (error) { next(error); }
+});
+
+// --- AUTH --- //
+router.post('/auth/login', async (req, res, next) => {
+    try {
+        const { username, password } = req.body;
+        if (!username || !password) {
+            return res.status(400).json({ message: 'Username and password are required' });
+        }
+        
+        let targetRole = '';
+        
+        // Hardcoded checks based on user requirements for the demo
+        if (username === 'admin@overtkae' && password === 'admin@ overtake') {
+            targetRole = 'admin';
+        } else if (username === 'salesrep@overtake' && password === 'salesrep@overtake') {
+            targetRole = 'sales';
+        } else {
+            return res.status(401).json({ message: 'Invalid credentials' });
+        }
+
+        if (targetRole === 'admin') {
+            let user = await User.findOne({ role: 'admin' });
+            if (!user) {
+                user = {
+                    _id: 'default-admin-id',
+                    username: 'Administrator',
+                    role: 'admin'
+                };
+            }
+            return res.json(user);
+        } else if (targetRole === 'sales') {
+            // As per requirements: "all sales rep login through one common sales rep account"
+            // "dont give sales rep names on account"
+            return res.json({
+                _id: 'common-sales-rep',
+                username: 'Sales Team',
+                role: 'sales'
+            });
+        }
     } catch (error) { next(error); }
 });
 
@@ -228,6 +270,168 @@ router.post('/leads/bulk-update', async (req, res, next) => {
         );
 
         res.json({ message: 'Bulk update successful' });
+    } catch (error) { next(error); }
+});
+
+// --- API LEADS & WEBHOOKS --- //
+router.get('/api-leads', async (req, res, next) => {
+    try {
+        const apiLeads = await ApiLead.find().sort({ createdAt: -1 });
+        res.json(apiLeads);
+    } catch (error) { next(error); }
+});
+
+router.put('/api-leads/:id', async (req, res, next) => {
+    try {
+        const leadId = req.params.id;
+        const updates = req.body;
+
+        if (updates.phone) {
+            const existingWithPhone = await ApiLead.findOne({
+                phone: updates.phone.trim(),
+                _id: { $ne: leadId }
+            });
+            if (existingWithPhone) {
+                return res.status(400).json({ message: `Another pending contact with phone ${updates.phone} already exists.` });
+            }
+        }
+
+        const updatedLead = await ApiLead.findByIdAndUpdate(leadId, updates, { new: true });
+        if (!updatedLead) return res.status(404).json({ message: 'API Lead not found' });
+        res.json(updatedLead);
+    } catch (error) { next(error); }
+});
+
+router.delete('/api-leads/:id', async (req, res, next) => {
+    try {
+        await ApiLead.findByIdAndDelete(req.params.id);
+        res.json({ message: 'API Lead deleted successfully' });
+    } catch (error) { next(error); }
+});
+
+router.post('/api-leads/:id/approve', async (req, res, next) => {
+    try {
+        const leadId = req.params.id;
+        const stagedLead = await ApiLead.findById(leadId).lean();
+        
+        if (!stagedLead) return res.status(404).json({ message: 'API Lead not found' });
+
+        // Check if phone already exists in MAIN leads collection
+        const existingInCRM = await Lead.findOne({ phone: stagedLead.phone.trim() });
+        if (existingInCRM) {
+            return res.status(400).json({ message: `A contact with phone ${stagedLead.phone} already exists in the CRM.` });
+        }
+
+        // Move to Lead
+        delete stagedLead._id; // Remove the old ID to let MongoDB generate a fresh one for the CRM Lead
+        delete stagedLead.createdAt;
+        delete stagedLead.updatedAt;
+
+        const newLead = new Lead(stagedLead);
+        await newLead.save();
+
+        // Delete from ApiLead collection now that it is migrated
+        await ApiLead.findByIdAndDelete(leadId);
+
+        res.json(newLead);
+    } catch (error) { next(error); }
+});
+
+router.post('/webhooks/leads', async (req, res, next) => {
+    try {
+        const { leadOrigin, leadinfo } = req.body;
+        
+        if (!leadinfo) {
+             return res.status(400).json({ message: 'leadinfo object is required for webhook submission.' });
+        }
+
+        const name = leadinfo.first_name || leadinfo.name;
+        // Strip non-numeric chars for phone match checking
+        const phone = leadinfo.whatsapp_phone ? leadinfo.whatsapp_phone.replace(/\D/g, '') : (leadinfo.phone ? leadinfo.phone.replace(/\D/g, '') : null);
+        
+        if (!name || !phone) {
+            return res.status(400).json({ message: 'Name and phone inside leadinfo are required.' });
+        }
+
+        // Check if phone already exists in main CRM or ApiLeads
+        const existingApiLead = await ApiLead.findOne({ phone: phone.trim() });
+        if (existingApiLead) {
+            return res.status(409).json({ message: 'An API lead with this phone number is already pending.' });
+        }
+        
+        const existingMainLead = await Lead.findOne({ phone: phone.trim() });
+        if (existingMainLead) {
+            return res.status(409).json({ message: 'A lead with this phone number already exists in the main CRM.' });
+        }
+
+        // Validate leadOrigin against Mongoose Enum (now lowercase)
+        const validOrigins = ['whatsapp', 'insta', 'fb', 'walk-in', 'tele', 'referral', 'web', 'olx', 'other'];
+        let finalOrigin = (leadOrigin || leadinfo.leadOrigin || 'other').toLowerCase();
+        if (!validOrigins.includes(finalOrigin)) {
+            finalOrigin = 'other';
+        }
+
+        // Check for Custom Fields mapping to map into carDetails 
+        const carDetailsArray = [];
+        const custom = leadinfo.custom_fields || {};
+        const intent = custom.intention ? custom.intention.toLowerCase() : null;
+        
+        if (intent === 'buying' || intent === 'selling' || intent === 'exchange') {
+            const carDetail = { intent };
+            
+            if (intent === 'buying') {
+                carDetail.wantedCar = {
+                    brandName: custom['buy brand'],
+                    modelName: custom['buy model']
+                };
+            } else if (intent === 'selling') {
+                carDetail.ownedCar = {
+                    brandName: custom['sell brand'],
+                    modelName: custom['sell model'],
+                    year: custom['sell model year'],
+                    kmDriven: custom['sell model km']
+                };
+            } else if (intent === 'exchange') {
+                carDetail.ownedCar = {
+                    brandName: custom['exchange car brand owning'],
+                    modelName: custom['exchange car model owning']
+                };
+                carDetail.wantedCar = {
+                    brandName: custom['exchange car brand looking'],
+                    modelName: custom['exchange car model looking']
+                };
+            }
+            carDetailsArray.push(carDetail);
+        }
+
+        const notesArray = [];
+        if (custom.Note) {
+            notesArray.push(custom.Note);
+        }
+
+        // Construct final mapping
+        const leadData = {
+           name: name.trim(),
+           phone: phone.trim(),
+           leadOrigin: finalOrigin,
+           notes: notesArray,
+           carDetails: carDetailsArray
+        };
+
+        const apiLead = new ApiLead(leadData);
+        await apiLead.save();
+
+        res.status(201).json({
+            status: 'success',
+            message: 'Lead successfully captured and staged via webhook.',
+            data: {
+                id: apiLead._id,
+                name: apiLead.name,
+                phone: apiLead.phone,
+                leadOrigin: apiLead.leadOrigin,
+                vehiclesEnquired: apiLead.carDetails.length
+            }
+        });
     } catch (error) { next(error); }
 });
 

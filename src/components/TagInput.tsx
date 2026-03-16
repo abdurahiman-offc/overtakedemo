@@ -23,9 +23,9 @@ export function TagInput({ selectedTags, onTagsChange, availableTags, placeholde
     }, [input, availableTags, selectedTags]);
 
     const handleAddTag = (tag: string) => {
-        const trimmedTag = tag.trim();
-        if (trimmedTag && !selectedTags.includes(trimmedTag)) {
-            onTagsChange([...selectedTags, trimmedTag]);
+        const normalizedTag = tag.trim().toLowerCase();
+        if (normalizedTag && !selectedTags.includes(normalizedTag)) {
+            onTagsChange([...selectedTags, normalizedTag]);
         }
         setInput('');
         setShowSuggestions(false);
@@ -58,14 +58,14 @@ export function TagInput({ selectedTags, onTagsChange, availableTags, placeholde
 
     return (
         <div className={`relative ${className}`} ref={containerRef}>
-            <div className="flex flex-wrap gap-1.5 p-2 bg-white border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-indigo-100 focus-within:border-indigo-400 transition-all">
+            <div className="flex flex-wrap gap-1.5 p-2 bg-white border border-gray-200 rounded-lg focus-within:ring-2 focus-within:ring-gray-100 focus-within:border-gray-400 transition-all">
                 {selectedTags.map(tag => (
-                    <span key={tag} className="flex items-center gap-1 px-2 py-0.5 bg-indigo-50 text-indigo-700 rounded-md text-xs font-bold border border-indigo-100">
+                    <span key={tag} className="flex items-center gap-1 px-2 py-0.5 bg-[#1B1B19]/5 text-[#1B1B19] rounded-md text-xs font-bold border border-[#1B1B19]/10">
                         {tag}
                         <button
                             type="button"
                             onClick={() => handleRemoveTag(tag)}
-                            className="hover:text-indigo-900 transition-colors"
+                            className="hover:text-black transition-colors"
                         >
                             <X size={12} />
                         </button>
@@ -89,17 +89,17 @@ export function TagInput({ selectedTags, onTagsChange, availableTags, placeholde
                             key={suggestion}
                             type="button"
                             onClick={() => handleAddTag(suggestion)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-all flex items-center justify-between group"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-[#1B1B19]/5 transition-all flex items-center justify-between group"
                         >
                             <span className="font-medium text-gray-700">{suggestion}</span>
-                            <Plus size={14} className="text-gray-300 group-hover:text-indigo-500" />
+                            <Plus size={14} className="text-gray-300 group-hover:text-[#1B1B19]" />
                         </button>
                     ))}
                     {input.trim() && !availableTags.some(t => t.toLowerCase() === input.trim().toLowerCase()) && (
                         <button
                             type="button"
                             onClick={() => handleAddTag(input)}
-                            className="w-full text-left px-3 py-2 text-sm hover:bg-indigo-50 transition-all flex items-center gap-2 text-indigo-600 bg-indigo-50/30"
+                            className="w-full text-left px-3 py-2 text-sm hover:bg-[#1B1B19]/10 transition-all flex items-center gap-2 text-[#1B1B19] bg-[#1B1B19]/5"
                         >
                             <Plus size={14} />
                             <span className="font-bold">Create "{input.trim()}"</span>

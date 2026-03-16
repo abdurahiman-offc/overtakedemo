@@ -12,7 +12,7 @@ interface LeadFormModalProps {
 }
 
 export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalProps) {
-    const { addLead, updateLead, users, leads } = useLeads();
+    const { addLead, updateLead, updateApiLead, users, leads } = useLeads();
 
     // Get unique tags from all leads for suggestions
     const availableTags = useMemo(() => {
@@ -68,7 +68,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
         designation: '',
         leadOrigin: 'Other',
         enquiredVehicle: '',
-        leadType: 'cold',
+        leadType: 'hot',
         status: 'new',
         notes: [],
         tags: [],
@@ -81,12 +81,69 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
     });
 
     const [errors, setErrors] = useState<Record<string, string>>({});
+    const [focusedField, setFocusedField] = useState<string | null>(null);
+    const [newGeneralNote, setNewGeneralNote] = useState('');
+    const [newFollowupNote, setNewFollowupNote] = useState('');
+
+    const handleAddNote = () => {
+        if (!newGeneralNote.trim()) return;
+        setFormData(prev => ({
+            ...prev,
+            notes: [...(prev.notes || []), `${format(new Date(), 'EEEE, do MMMM yyyy')} - ${newGeneralNote.trim()}`]
+        }));
+        setNewGeneralNote('');
+    };
+
+    const handleAddFollowupNote = () => {
+        if (!newFollowupNote.trim()) return;
+        setFormData(prev => ({
+            ...prev,
+            followupNote: [...(prev.followupNote || []), `${format(new Date(), 'EEEE, do MMMM yyyy')} - ${newFollowupNote.trim()}`]
+        }));
+        setNewFollowupNote('');
+    };
 
     useEffect(() => {
         if (initialData) {
+            // Normalize carDetails to ensure legacy data is moved to nested structure for the form
+            // Also ensure all fields are initialized to avoid undefined issues in the form
+            const normalizedCarDetails = (initialData.carDetails || []).map(car => {
+                const normalized = { ...car };
+                
+                // Initialize nested objects if they don't exist but data is present in legacy fields
+                if (car.intent === 'buying' || car.intent === 'exchange') {
+                    if (!normalized.wantedCar) {
+                        normalized.wantedCar = {
+                            brandName: car.brandName || '',
+                            modelName: car.modelName || '',
+                            fuelType: car.fuelType || '',
+                            kmDriven: car.kmDriven || '',
+                            year: '',
+                            amount: ''
+                        } as VehicleInfo;
+                    }
+                }
+                
+                if (car.intent === 'selling' || car.intent === 'exchange') {
+                    if (!normalized.ownedCar) {
+                        normalized.ownedCar = {
+                            brandName: car.brandName || '',
+                            modelName: car.modelName || '',
+                            fuelType: car.fuelType || '',
+                            kmDriven: car.kmDriven || '',
+                            year: '',
+                            amount: ''
+                        } as VehicleInfo;
+                    }
+                }
+                
+                return normalized;
+            });
+
             setFormData({
                 ...initialData,
-                assignedTo: initialData.assignedTo // Handle populated vs ID
+                carDetails: normalizedCarDetails,
+                assignedTo: typeof initialData.assignedTo === 'object' ? (initialData.assignedTo as any)._id : initialData.assignedTo
             });
         }
     }, [initialData]);
@@ -183,7 +240,12 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
         const finalData = { ...formData };
 
         if (initialData) {
-            updateLead(initialData._id, finalData);
+            // Check if it's an API Lead based on the flag we set in context
+            if ((initialData as any).isApiLead) {
+                updateApiLead(initialData._id!, finalData);
+            } else {
+                updateLead(initialData._id!, finalData);
+            }
         } else {
             addLead(finalData);
         }
@@ -197,7 +259,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
             {/* Basic Info */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div className="flex flex-col gap-1">
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Name <span className="text-red-500">*</span></label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Name <span className="text-red-500">*</span></label>
                     <input
                         name="name"
                         required
@@ -208,7 +270,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                     {errors.name && <span className="mt-1 text-[11px] font-bold text-red-600 bg-red-50 px-2.5 py-1.5 rounded-lg border border-red-100 flex items-center gap-1.5"><AlertCircle size={12} /> {errors.name}</span>}
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Phone <span className="text-red-500">*</span></label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Phone <span className="text-red-500">*</span></label>
                     <input
                         name="phone"
                         required
@@ -223,15 +285,17 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
                 <div className="relative">
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Place</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Place</label>
                     <input
                         name="place"
                         value={formData.place}
                         onChange={handleChange}
+                        onFocus={() => setFocusedField('place')}
+                        onBlur={() => setFocusedField(null)}
                         className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                     />
-                    {availablePlaces.length > 0 && formData.place && (
-                        <div className="absolute z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {availablePlaces.length > 0 && formData.place && focusedField === 'place' && (
+                        <div className="absolute top-full left-0 z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                             {availablePlaces
                                 .filter(p => p.toLowerCase().includes((formData.place || '').toLowerCase()))
                                 .map(p => (
@@ -248,15 +312,17 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                     )}
                 </div>
                 <div className="relative">
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Designation</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Designation</label>
                     <input
                         name="designation"
                         value={formData.designation}
                         onChange={handleChange}
+                        onFocus={() => setFocusedField('designation')}
+                        onBlur={() => setFocusedField(null)}
                         className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                     />
-                    {availableDesignations.length > 0 && formData.designation && (
-                        <div className="absolute z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                    {availableDesignations.length > 0 && formData.designation && focusedField === 'designation' && (
+                        <div className="absolute top-full left-0 z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                             {availableDesignations
                                 .filter(d => d.toLowerCase().includes((formData.designation || '').toLowerCase()))
                                 .map(d => (
@@ -273,21 +339,21 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                     )}
                 </div>
                 <div>
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Lead Origin</label>
-                    <select name="leadOrigin" value={formData.leadOrigin} onChange={handleChange} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
-                        <option value="WhatsApp">WhatsApp</option>
-                        <option value="Insta">Insta</option>
-                        <option value="FB">FB</option>
-                        <option value="Walk-in">Walk-in</option>
-                        <option value="Tele">Tele</option>
-                        <option value="Referral">Referral</option>
-                        <option value="Web">Web</option>
-                        <option value="OLX">OLX</option>
-                        <option value="Other">Other</option>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Lead Origin</label>
+                    <select name="leadOrigin" value={formData.leadOrigin?.toLowerCase()} onChange={handleChange} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
+                        <option value="whatsapp">WhatsApp</option>
+                        <option value="insta">Insta</option>
+                        <option value="fb">FB</option>
+                        <option value="walk-in">Walk-in</option>
+                        <option value="tele">Tele</option>
+                        <option value="referral">Referral</option>
+                        <option value="web">Web</option>
+                        <option value="olx">OLX</option>
+                        <option value="other">Other</option>
                     </select>
                 </div>
                 <div>
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Assign To</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Assign To</label>
                     <select
                         name="assignedTo"
                         value={typeof formData.assignedTo === 'object' ? (formData.assignedTo as { _id: string })._id : formData.assignedTo}
@@ -301,23 +367,23 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                     </select>
                 </div>
                 <div>
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Payment Status</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Payment Status</label>
                     <select
                         name="paymentStatus"
-                        value={formData.paymentStatus}
+                        value={formData.paymentStatus?.toLowerCase()}
                         onChange={handleChange}
                         className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                     >
                         <option value="">None</option>
-                        <option value="Advance Payment">Advance Payment</option>
-                        <option value="Full Payment">Full Payment</option>
+                        <option value="advance payment">Advance Payment</option>
+                        <option value="full payment">Full Payment</option>
                     </select>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 <div>
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Lead Type</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Lead Type</label>
                     <select name="leadType" value={formData.leadType} onChange={handleChange} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
                         <option value="hot">Hot</option>
                         <option value="warm">Warm</option>
@@ -325,7 +391,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                     </select>
                 </div>
                 <div>
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Status</label>
                     <select name="status" value={formData.status} onChange={handleChange} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
                         <option value="new">New</option>
                         <option value="contacted">Contacted</option>
@@ -358,7 +424,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                     <button
                         type="button"
                         onClick={addCarDetail}
-                        className="flex items-center gap-1.5 rounded-lg bg-indigo-600 px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-indigo-700"
+                        className="flex items-center gap-1.5 rounded-lg bg-[#1B1B19] px-3 py-1.5 text-xs font-bold text-white transition-all hover:bg-black"
                     >
                         <Plus size={14} /> Add Car
                     </button>
@@ -374,22 +440,22 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                             <Trash2 size={14} />
                         </button>
                         <div className="flex flex-col gap-1.5 md:col-span-3">
-                            <label className="text-[10px] font-bold uppercase text-gray-400">Intent</label>
+                            <label className="text-[10px] font-bold uppercase text-gray-700">Intent</label>
                             <div className="flex gap-2">
                                 <button
                                     type="button"
                                     onClick={() => handleCarDetailChange(idx, 'intent', 'buying')}
-                                    className={`flex - 1 rounded - lg py - 1.5 text - xs font - bold border transition - all ${car.intent === 'buying' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-500 border-gray-200'} `}
+                                    className={`flex-1 rounded-lg py-1.5 text-xs font-bold border transition-all ${car.intent === 'buying' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
                                 > buying </button>
                                 <button
                                     type="button"
                                     onClick={() => handleCarDetailChange(idx, 'intent', 'selling')}
-                                    className={`flex - 1 rounded - lg py - 1.5 text - xs font - bold border transition - all ${car.intent === 'selling' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-500 border-gray-200'} `}
+                                    className={`flex-1 rounded-lg py-1.5 text-xs font-bold border transition-all ${car.intent === 'selling' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
                                 > selling </button>
                                 <button
                                     type="button"
                                     onClick={() => handleCarDetailChange(idx, 'intent', 'exchange')}
-                                    className={`flex - 1 rounded - lg py - 1.5 text - xs font - bold border transition - all ${car.intent === 'exchange' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-gray-50 text-gray-500 border-gray-200'} `}
+                                    className={`flex-1 rounded-lg py-1.5 text-xs font-bold border transition-all ${car.intent === 'exchange' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-gray-50 text-gray-500 border-gray-200'}`}
                                 > exchange </button>
                             </div>
                         </div>
@@ -400,14 +466,16 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                 <h4 className="text-xs font-bold text-blue-800 mb-3 border-b border-blue-100 pb-2">Wanted Car (To Buy)</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div className="flex flex-col gap-1 relative">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Brand Name</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Brand Name</label>
                                         <input
                                             value={car.wantedCar?.brandName || ''}
                                             onChange={(e) => handleCarDetailChange(idx, 'wantedCar.brandName', e.target.value)}
+                                            onFocus={() => setFocusedField(`car-${idx}-wanted-brand`)}
+                                            onBlur={() => setFocusedField(null)}
                                             className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                                         />
-                                        {availableBrandNames.length > 0 && car.wantedCar?.brandName && (
-                                            <div className="absolute z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                        {availableBrandNames.length > 0 && car.wantedCar?.brandName && focusedField === `car-${idx}-wanted-brand` && (
+                                            <div className="absolute top-full left-0 z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                                                 {availableBrandNames
                                                     .filter(b => b.toLowerCase().includes((car.wantedCar?.brandName || '').toLowerCase()))
                                                     .map(b => (
@@ -424,14 +492,16 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-1 relative">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Model Name</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Model Name</label>
                                         <input
                                             value={car.wantedCar?.modelName || ''}
                                             onChange={(e) => handleCarDetailChange(idx, 'wantedCar.modelName', e.target.value)}
+                                            onFocus={() => setFocusedField(`car-${idx}-wanted-model`)}
+                                            onBlur={() => setFocusedField(null)}
                                             className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                                         />
-                                        {availableModelNames.length > 0 && car.wantedCar?.modelName && (
-                                            <div className="absolute z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                        {availableModelNames.length > 0 && car.wantedCar?.modelName && focusedField === `car-${idx}-wanted-model` && (
+                                            <div className="absolute top-full left-0 z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                                                 {availableModelNames
                                                     .filter(m => m.toLowerCase().includes((car.wantedCar?.modelName || '').toLowerCase()))
                                                     .map(m => (
@@ -448,18 +518,18 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Fuel Type</label>
-                                        <select value={car.wantedCar?.fuelType || ''} onChange={(e) => handleCarDetailChange(idx, 'wantedCar.fuelType', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Fuel Type</label>
+                                        <select value={car.wantedCar?.fuelType?.toLowerCase() || ''} onChange={(e) => handleCarDetailChange(idx, 'wantedCar.fuelType', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
                                             <option value="">Select Fuel</option>
-                                            <option value="Petrol">Petrol</option>
-                                            <option value="Diesel">Diesel</option>
-                                            <option value="Electric">Electric</option>
-                                            <option value="Hybrid">Hybrid</option>
-                                            <option value="CNG">CNG</option>
+                                            <option value="petrol">Petrol</option>
+                                            <option value="diesel">Diesel</option>
+                                            <option value="electric">Electric</option>
+                                            <option value="hybrid">Hybrid</option>
+                                            <option value="cng">CNG</option>
                                         </select>
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Year</label>
                                         <input
                                             value={car.wantedCar?.year || ''}
                                             onChange={(e) => {
@@ -471,7 +541,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">KM Driven</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">KM Driven</label>
                                         <input
                                             value={car.wantedCar?.kmDriven || ''}
                                             onChange={(e) => {
@@ -482,7 +552,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Amount / Budget</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Amount / Budget</label>
                                         <input
                                             value={car.wantedCar?.amount || ''}
                                             onChange={(e) => {
@@ -502,14 +572,16 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                 <h4 className="text-xs font-bold text-amber-800 mb-3 border-b border-amber-100 pb-2">Owned Car (To Trade/Sell)</h4>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                                     <div className="flex flex-col gap-1 relative">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Brand Name</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Brand Name</label>
                                         <input
                                             value={car.ownedCar?.brandName || ''}
                                             onChange={(e) => handleCarDetailChange(idx, 'ownedCar.brandName', e.target.value)}
+                                            onFocus={() => setFocusedField(`car-${idx}-owned-brand`)}
+                                            onBlur={() => setFocusedField(null)}
                                             className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                                         />
-                                        {availableBrandNames.length > 0 && car.ownedCar?.brandName && (
-                                            <div className="absolute z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                        {availableBrandNames.length > 0 && car.ownedCar?.brandName && focusedField === `car-${idx}-owned-brand` && (
+                                            <div className="absolute top-full left-0 z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                                                 {availableBrandNames
                                                     .filter(b => b.toLowerCase().includes((car.ownedCar?.brandName || '').toLowerCase()))
                                                     .map(b => (
@@ -526,14 +598,16 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-1 relative">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Model Name</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Model Name</label>
                                         <input
                                             value={car.ownedCar?.modelName || ''}
                                             onChange={(e) => handleCarDetailChange(idx, 'ownedCar.modelName', e.target.value)}
+                                            onFocus={() => setFocusedField(`car-${idx}-owned-model`)}
+                                            onBlur={() => setFocusedField(null)}
                                             className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
                                         />
-                                        {availableModelNames.length > 0 && car.ownedCar?.modelName && (
-                                            <div className="absolute z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                        {availableModelNames.length > 0 && car.ownedCar?.modelName && focusedField === `car-${idx}-owned-model` && (
+                                            <div className="absolute top-full left-0 z-40 mt-1 w-full max-h-40 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
                                                 {availableModelNames
                                                     .filter(m => m.toLowerCase().includes((car.ownedCar?.modelName || '').toLowerCase()))
                                                     .map(m => (
@@ -550,18 +624,18 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         )}
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Fuel Type</label>
-                                        <select value={car.ownedCar?.fuelType || ''} onChange={(e) => handleCarDetailChange(idx, 'ownedCar.fuelType', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Fuel Type</label>
+                                        <select value={car.ownedCar?.fuelType?.toLowerCase() || ''} onChange={(e) => handleCarDetailChange(idx, 'ownedCar.fuelType', e.target.value)} className="w-full rounded-xl border border-gray-200 bg-white px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium">
                                             <option value="">Select Fuel</option>
-                                            <option value="Petrol">Petrol</option>
-                                            <option value="Diesel">Diesel</option>
-                                            <option value="Electric">Electric</option>
-                                            <option value="Hybrid">Hybrid</option>
-                                            <option value="CNG">CNG</option>
+                                            <option value="petrol">Petrol</option>
+                                            <option value="diesel">Diesel</option>
+                                            <option value="electric">Electric</option>
+                                            <option value="hybrid">Hybrid</option>
+                                            <option value="cng">CNG</option>
                                         </select>
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Year</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Year</label>
                                         <input
                                             value={car.ownedCar?.year || ''}
                                             onChange={(e) => {
@@ -573,7 +647,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">KM Driven</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">KM Driven</label>
                                         <input
                                             value={car.ownedCar?.kmDriven || ''}
                                             onChange={(e) => {
@@ -584,7 +658,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         />
                                     </div>
                                     <div className="flex flex-col gap-1">
-                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Selling Price / Amount</label>
+                                        <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Selling Price / Amount</label>
                                         <input
                                             value={car.ownedCar?.amount || ''}
                                             onChange={(e) => {
@@ -599,7 +673,7 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                         )}
 
                         <div className="flex flex-col gap-1.5 md:col-span-3">
-                            <label className="text-[10px] font-bold uppercase text-gray-400">Additional Requirements</label>
+                            <label className="text-[10px] font-bold uppercase text-gray-700">Additional Requirements</label>
                             <input value={car.additionalReqs} onChange={(e) => handleCarDetailChange(idx, 'additionalReqs', e.target.value)} className="rounded-lg border border-gray-100 bg-gray-50 px-3 py-2 text-sm" />
                         </div>
                     </div>
@@ -608,52 +682,34 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                 {(!formData.carDetails || formData.carDetails.length === 0) && (
                     <div className="py-4 text-center text-sm text-indigo-400 italic">No car details added yet.</div>
                 )}
-                <button
-                    type="button"
-                    onClick={addCarDetail}
-                    className="self-start flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-2.5 text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all hover:border-gray-300"
-                >
-                    <Plus size={16} /> Add Car Option
-                </button>
             </div>
+
 
             <div className="flex flex-col gap-4 bg-gray-50/30 p-6 rounded-2xl border border-gray-100">
                 <div className="flex items-center gap-2">
-                    <Tag size={18} className="text-gray-400" />
-                    <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">Tags</h3>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                    {formData.tags?.map((tag, idx) => (
-                        <div key={idx} className="flex items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 text-xs font-bold text-indigo-700 border border-indigo-100">
-                            {tag}
-                            <button type="button" onClick={() => setFormData(prev => ({ ...prev, tags: prev.tags?.filter((_, i) => i !== idx) }))} className="text-indigo-400 hover:text-indigo-600">
-                                <X size={14} />
-                            </button>
-                        </div>
-                    ))}
-                    <input
-                        placeholder="Add tag..."
-                        onKeyDown={(e) => {
-                            if (e.key === 'Enter') {
-                                e.preventDefault();
-                                const val = (e.target as HTMLInputElement).value.trim();
-                                if (val && !formData.tags?.includes(val)) {
-                                    setFormData(prev => ({ ...prev, tags: [...(prev.tags || []), val] }));
-                                    (e.target as HTMLInputElement).value = '';
-                                }
-                            }
-                        }}
-                        className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/10 transition-all"
-                    />
-                </div>
-            </div>
-
-            <div className="flex flex-col gap-4 bg-gray-50/30 p-6 rounded-2xl border border-gray-100">
-                <div className="flex items-center gap-2">
-                    <Edit3 size={18} className="text-gray-400" />
+                    <Edit3 size={18} className="text-gray-700" />
                     <h3 className="text-xs font-bold text-gray-900 uppercase tracking-widest">General Notes</h3>
                 </div>
                 <div className="flex flex-col gap-4">
+                    {/* New Note Input */}
+                    <div className="flex gap-2">
+                        <textarea
+                            value={newGeneralNote}
+                            onChange={(e) => setNewGeneralNote(e.target.value)}
+                            placeholder="Type a general note..."
+                            className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm min-h-[80px] focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                        />
+                        <button
+                            type="button"
+                            onClick={handleAddNote}
+                            disabled={!newGeneralNote.trim()}
+                            className="self-end rounded-xl bg-[#1B1B19] px-4 py-2.5 text-xs font-bold text-white hover:bg-black transition-all disabled:opacity-50"
+                        >
+                            Add Note
+                        </button>
+                    </div>
+
+                    {/* Existing Notes List */}
                     {formData.notes?.map((note, idx) => (
                         <div key={idx} className="flex gap-2 items-start relative">
                             <textarea
@@ -668,30 +724,42 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                             <button
                                 type="button"
                                 onClick={() => setFormData(prev => ({ ...prev, notes: prev.notes?.filter((_, i) => i !== idx) }))}
-                                className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all absolute top-2 right-2"
+                                className="p-1.5 text-gray-700 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all absolute top-2 right-2"
                             >
                                 <Trash2 size={16} />
                             </button>
                         </div>
                     ))}
-                    <button
-                        type="button"
-                        onClick={() => setFormData(prev => ({ ...prev, notes: [...(prev.notes || []), `${format(new Date(), 'EEEE, do MMMM yyyy')} - `] }))}
-                        className="self-start flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-2.5 text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all hover:border-gray-300"
-                    >
-                        <Plus size={16} /> Add Note
-                    </button>
                 </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5 items-start">
                 <div className="flex flex-col gap-3">
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Follow-up Date</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Follow-up Date</label>
                     <input type="date" name="followupDate" value={formData.followupDate ? formData.followupDate.split('T')[0] : ''} onChange={handleChange} className="w-full rounded-xl border border-gray-200 px-4 py-3 text-sm focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all" />
                 </div>
                 <div className="flex flex-col gap-3">
-                    <label className="mb-1.5 block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Follow-up Notes</label>
+                    <label className="mb-1.5 block text-[10px] font-bold text-gray-700 uppercase tracking-widest">Follow-up Notes</label>
                     <div className="flex flex-col gap-3">
+                        {/* New Follow-up Note Input */}
+                        <div className="flex gap-2">
+                            <textarea
+                                value={newFollowupNote}
+                                onChange={(e) => setNewFollowupNote(e.target.value)}
+                                placeholder="Type a follow-up summary..."
+                                className="flex-1 rounded-xl border border-gray-200 px-4 py-3 text-sm min-h-[60px] focus:border-indigo-500 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 transition-all font-medium"
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAddFollowupNote}
+                                disabled={!newFollowupNote.trim()}
+                                className="self-end rounded-xl bg-[#1B1B19] px-4 py-2.5 text-xs font-bold text-white hover:bg-black transition-all disabled:opacity-50"
+                            >
+                                Add Note
+                            </button>
+                        </div>
+
+                        {/* Existing Follow-up Notes List */}
                         {formData.followupNote?.map((note, idx) => (
                             <div key={idx} className="flex gap-2 items-start relative group">
                                 <textarea
@@ -710,26 +778,19 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
                                         const newNotes = formData.followupNote?.filter((_, i) => i !== idx);
                                         setFormData(prev => ({ ...prev, followupNote: newNotes }));
                                     }}
-                                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all absolute top-2 right-2"
+                                    className="p-1.5 text-gray-700 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all absolute top-2 right-2"
                                 >
                                     <Trash2 size={16} />
                                 </button>
                             </div>
                         ))}
-                        <button
-                            type="button"
-                            onClick={() => setFormData(prev => ({ ...prev, followupNote: [...(prev.followupNote || []), `${format(new Date(), 'EEEE, do MMMM yyyy')} - `] }))}
-                            className="self-start flex items-center gap-2 rounded-xl bg-gray-50 px-4 py-2.5 text-xs font-bold border border-gray-200 text-gray-600 hover:bg-gray-100 transition-all hover:border-gray-300"
-                        >
-                            <Plus size={16} /> Add Follow-up Note
-                        </button>
                     </div>
                 </div>
             </div>
 
             <div className="mt-4 flex justify-end gap-3 border-t border-gray-100 pt-6">
                 <button type="button" onClick={onClose} className="rounded-xl border border-gray-200 bg-white px-6 py-3 text-sm font-bold text-gray-600 hover:bg-gray-50 shadow-sm transition-all">Cancel</button>
-                <button type="submit" className="flex items-center gap-2 rounded-xl bg-indigo-600 px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-indigo-700 transition-all active:scale-95">
+                <button type="submit" className="flex items-center gap-2 rounded-xl bg-[#1B1B19] px-8 py-3 text-sm font-bold text-white shadow-md hover:bg-black transition-all active:scale-95">
                     <Save size={18} /> {isEdit ? 'Update Contact' : 'Save Contact'}
                 </button>
             </div>
@@ -738,8 +799,8 @@ export function LeadFormModal({ onClose, initialData, inline }: LeadFormModalPro
 
     if (inline) {
         return (
-            <div className="w-full h-full flex-1 animate-fadeIn pb-10">
-                <div className="flex flex-col overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+            <div className="w-full animate-fadeIn pb-10">
+                <div className="flex flex-col rounded-2xl border border-gray-200 bg-white shadow-sm">
                     <div className="flex items-center justify-between border-b border-gray-100 px-6 py-5">
                         <h2 className="text-xl font-bold text-gray-900">{isEdit ? 'Edit Contact' : 'Add New Contact'}</h2>
                         <button onClick={onClose} className="rounded-xl border border-gray-200 bg-white px-4 py-2 text-sm font-bold text-gray-600 shadow-sm transition-all hover:bg-gray-50 hover:text-gray-900">

@@ -3,7 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { useLeads } from '../../context/LeadsContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Lead } from '../../types';
-import { Zap, PhoneCall, Users, Eye, Phone, User, Briefcase } from 'lucide-react';
+import { Zap, PhoneCall, Users, Eye, Phone, User, Briefcase, Calendar, CreditCard } from 'lucide-react';
+
 import { clsx } from 'clsx';
 
 export function PipelineView() {
@@ -28,6 +29,7 @@ export function PipelineView() {
         updateLead(leadId, data);
     };
 
+
     return (
         <div className="flex flex-col gap-6">
             {/* Status Tabs */}
@@ -40,7 +42,7 @@ export function PipelineView() {
                             className={clsx(
                                 "flex-1 px-6 py-3 rounded-t-2xl text-sm font-bold transition-all flex items-center justify-center gap-2 border-b-2 relative",
                                 activeStatus === status.id
-                                    ? "text-indigo-600 border-indigo-600 bg-indigo-50/30"
+                                    ? "text-black border-[#1B1B19] bg-gray-50"
                                     : "text-gray-400 border-transparent hover:text-gray-600 hover:bg-gray-50/50"
                             )}
                         >
@@ -48,7 +50,7 @@ export function PipelineView() {
                             {status.title}
                             <span className={clsx(
                                 "ml-2 text-[10px] px-2 py-0.5 rounded-full",
-                                activeStatus === status.id ? "bg-indigo-100 text-indigo-600" : "bg-gray-100 text-gray-500"
+                                activeStatus === status.id ? "bg-gray-200 text-black" : "bg-gray-100 text-gray-500"
                             )}>
                                 {leads.filter(l => l.status === status.id).length}
                             </span>
@@ -64,13 +66,22 @@ export function PipelineView() {
                         key={column.id}
                         className="flex-1 flex flex-col gap-4 rounded-2xl border border-gray-200/50 bg-white/40 p-4 h-full overflow-hidden"
                     >
-                        <div className="flex items-center justify-between px-2">
+                        <div className="px-6 py-5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                             <div className="flex items-center gap-2">
                                 <div className={`p-1.5 rounded-lg ${column.bg} ${column.color}`}>
                                     <column.icon size={18} />
                                 </div>
-                                <h3 className="font-bold text-gray-900">{column.title}</h3>
-                                <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                                <h3
+                                    className={clsx(
+                                        "font-bold text-xs uppercase tracking-wide px-3 py-1 rounded-full shadow-sm",
+                                        column.id === 'hot' && "bg-red-500 text-white",
+                                        column.id === 'warm' && "bg-amber-400 text-white",
+                                        column.id === 'cold' && "bg-blue-500 text-white"
+                                    )}
+                                >
+                                    {column.title}
+                                </h3>
+                                <span className="text-xs font-bold text-gray-600 bg-gray-50 px-2.5 py-0.5 rounded-full border border-gray-200">
                                     {leads.filter((l: Lead) => l.status === activeStatus && l.leadType === column.id).length}
                                 </span>
                             </div>
@@ -90,24 +101,88 @@ export function PipelineView() {
                                             whileHover={{ y: -3 }}
                                             className="group relative rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md cursor-pointer flex flex-col gap-3"
                                         >
-                                            <div className="flex justify-between items-start">
-                                                <div className="flex flex-col pr-8">
-                                                    <h4 className="font-bold text-gray-900 truncate leading-tight">{lead.name}</h4>
-                                                    <div className="flex items-center gap-2 text-[10px] font-semibold text-gray-500 mt-1">
-                                                        <Phone size={10} className="text-gray-400" />
-                                                        <span>{lead.phone}</span>
-                                                    </div>
+                                            {/* Header: Name + Origin */}
+                                            <div className="flex justify-between items-start gap-3">
+                                                <div className="flex flex-col min-w-0">
+                                                    <h4 className="font-bold text-gray-900 truncate leading-tight" title={lead.name}>
+                                                        {lead.name}
+                                                    </h4>
                                                 </div>
-                                                {/* Edit action removed from pipeline cards */}
+                                                <span className="text-[9px] font-bold text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded-full border border-gray-200 uppercase tracking-wider shrink-0">
+                                                    {lead.leadOrigin}
+                                                </span>
                                             </div>
 
-                                            <div className="flex items-center justify-between border-y border-gray-50 py-2">
-                                                <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 uppercase tracking-wider">{lead.leadOrigin}</span>
-                                                <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-600">
-                                                    <User size={12} className="text-gray-400" />
-                                                    <span className="truncate max-w-[80px]">{typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Unassigned'}</span>
+                                            {/* Details Section */}
+                                            <div className="flex flex-col gap-1.5">
+                                                <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
+                                                    <Phone size={11} className="text-gray-400" />
+                                                    <span className="truncate">{lead.phone}</span>
                                                 </div>
+                                                <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                                    <Calendar size={11} className="text-gray-400" />
+                                                    <span>{new Date(lead.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                </div>
+                                                <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-600">
+                                                    <User size={11} className="text-gray-400" />
+                                                    <span className="truncate">
+                                                        {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Unassigned'}
+                                                    </span>
+                                                </div>
+                                                {lead.paymentStatus && (
+                                                    <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-600 mt-0.5">
+                                                        <CreditCard size={11} className={(lead.paymentStatus === 'Full Payment' || lead.paymentStatus === 'Advance Payment' || lead.paymentStatus === 'completed' || lead.paymentStatus === 'partial') ? "text-emerald-500" : "text-gray-400"} />
+                                                        <span className={`px-1.5 py-0.5 rounded-sm capitalize font-bold tracking-wider ${(lead.paymentStatus === 'Full Payment' || lead.paymentStatus === 'Advance Payment' || lead.paymentStatus === 'completed' || lead.paymentStatus === 'partial') ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"}`}>
+                                                            {lead.paymentStatus}
+                                                        </span>
+                                                    </div>
+                                                )}
                                             </div>
+
+                                            {/* Intentions row (show all car intentions) */}
+                                            {lead.carDetails && lead.carDetails.length > 0 && (
+                                                <div className="mt-1 flex flex-col gap-1">
+                                                    {lead.carDetails.map((c, idx) => {
+                                                        if (c.intent === 'exchange') {
+                                                            return (
+                                                                <span key={idx} className="text-[11px]">
+                                                                    <span className="font-semibold text-[#1B1B19] uppercase text-[10px] mr-1">Exchange:</span>
+                                                                    {(c.ownedCar?.brandName || c.brandName) && (
+                                                                        <span className="text-gray-700">
+                                                                            {c.ownedCar?.brandName || c.brandName} {c.ownedCar?.modelName || c.modelName}
+                                                                        </span>
+                                                                    )}
+                                                                    <span className="text-gray-400 font-bold mx-1">→</span>
+                                                                    {(c.wantedCar?.brandName || c.brandName) && (
+                                                                        <span className="text-gray-700">
+                                                                            {c.wantedCar?.brandName || c.brandName} {c.wantedCar?.modelName || c.modelName}
+                                                                        </span>
+                                                                    )}
+                                                                </span>
+                                                            );
+                                                        }
+                                                        if (c.intent === 'buying') {
+                                                            return (
+                                                                <span key={idx} className="text-[11px]">
+                                                                    <span className="font-semibold text-blue-600 uppercase text-[10px] mr-1">Buy:</span>
+                                                                    <span className="text-gray-700">
+                                                                        {(c.wantedCar?.brandName || c.brandName) || 'Any'} {(c.wantedCar?.modelName || c.modelName) || ''}
+                                                                    </span>
+                                                                </span>
+                                                            );
+                                                        }
+                                                        // selling
+                                                        return (
+                                                            <span key={idx} className="text-[11px]">
+                                                                <span className="font-semibold text-amber-600 uppercase text-[10px] mr-1">Sell:</span>
+                                                                <span className="text-gray-700">
+                                                                    {(c.ownedCar?.brandName || c.brandName) || 'Any'} {(c.ownedCar?.modelName || c.modelName) || ''}
+                                                                </span>
+                                                            </span>
+                                                        );
+                                                    })}
+                                                </div>
+                                            )}
 
                                             {/* Transition Actions */}
                                             <div className="flex flex-col gap-2 mt-1">
@@ -146,7 +221,7 @@ export function PipelineView() {
 
                                             <button
                                                 onClick={(e) => { e.stopPropagation(); navigate(`/contact/${lead._id}`); }}
-                                                className="w-full mt-1 flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[10px] font-bold py-2 rounded-xl border border-indigo-100 transition-colors"
+                                                className="w-full mt-1 flex items-center justify-center gap-1.5 bg-[#1B1B19] hover:bg-black text-white text-[10px] font-bold py-2 rounded-xl border border-[#1B1B19] transition-colors shadow-sm shadow-gray-200"
                                             >
                                                 <Eye size={12} /> View Lead
                                             </button>

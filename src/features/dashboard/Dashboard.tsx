@@ -34,13 +34,14 @@ export function Dashboard() {
 
     const row2 = [
         { title: 'Unassigned', value: unassignedLeads, icon: CalendarIcon, color: 'text-orange-500', bg: 'bg-orange-50' },
-        { title: 'Advance Payment', value: advancePayments, icon: Zap, color: 'text-indigo-600', bg: 'bg-indigo-50' },
+        { title: 'Advance Payment', value: advancePayments, icon: Zap, color: 'text-[#1B1B19]', bg: 'bg-gray-50' },
         { title: 'Today\'s Follow-ups', value: todaysFollowupsCount, icon: CalendarIcon, color: 'text-emerald-600', bg: 'bg-emerald-50' },
         { title: 'Missed Follow-ups', value: missedFollowups, icon: Zap, color: 'text-red-600', bg: 'bg-red-50' },
     ];
 
     const originBreakdown = leads.reduce((acc, lead) => {
-        acc[lead.leadOrigin] = (acc[lead.leadOrigin] || 0) + 1;
+        const origin = (lead.leadOrigin || 'other').trim().toLowerCase();
+        acc[origin] = (acc[origin] || 0) + 1;
         return acc;
     }, {} as Record<string, number>);
 
@@ -128,7 +129,7 @@ export function Dashboard() {
                         {Object.entries(originBreakdown).sort((a, b) => b[1] - a[1]).map(([origin, count]) => (
                             <div key={origin} className="flex flex-col p-3 rounded-xl bg-gray-50 border border-gray-100">
                                 <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400 mb-1">{origin}</span>
-                                <span className="text-xl font-bold text-indigo-600">{count}</span>
+                                <span className="text-xl font-bold text-[#1B1B19]">{count}</span>
                             </div>
                         ))}
                         {Object.keys(originBreakdown).length === 0 && <span className="text-xs text-gray-400 italic">No origin data available</span>}
@@ -157,9 +158,9 @@ export function Dashboard() {
                 <div className="flex items-center justify-between border-b border-gray-100 pb-4">
                     <h2 className="text-xl font-bold text-gray-900">Users</h2>
                     <div className="flex gap-4">
-                        <div className="flex items-center gap-2 px-3 py-1.5 bg-indigo-50 rounded-lg border border-indigo-100">
-                            <span className="text-[10px] font-bold uppercase text-indigo-400">Total Users</span>
-                            <span className="text-sm font-bold text-indigo-700">{users.length}</span>
+                        <div className="flex items-center gap-2 px-3 py-1.5 bg-gray-50 rounded-lg border border-gray-200">
+                            <span className="text-[10px] font-bold uppercase text-gray-500">Total Users</span>
+                            <span className="text-sm font-bold text-[#1B1B19]">{users.length}</span>
                         </div>
                         <div className="flex items-center gap-2 px-3 py-1.5 bg-orange-50 rounded-lg border border-orange-100">
                             <span className="text-[10px] font-bold uppercase text-orange-400">Unassigned Leads</span>
@@ -169,9 +170,9 @@ export function Dashboard() {
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                     {userPerformance.map(user => (
-                        <div key={user._id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all hover:border-indigo-100 hover:shadow-md">
+                        <div key={user._id} className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden transition-all hover:border-gray-300 hover:shadow-md">
                             <div className="bg-gray-50/50 p-4 border-b border-gray-100 flex items-center gap-3">
-                                <div className="h-10 w-10 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center font-bold">
+                                <div className="h-10 w-10 rounded-full bg-gray-100 text-[#1B1B19] flex items-center justify-center font-bold">
                                     {user.username.charAt(0)}
                                 </div>
                                 <div className="flex flex-col">
@@ -182,7 +183,7 @@ export function Dashboard() {
                             <div className="grid grid-cols-3 divide-x divide-gray-100">
                                 <div className="p-4 flex flex-col items-center gap-1">
                                     <span className="text-[9px] font-bold uppercase tracking-tighter text-gray-400">Assigned</span>
-                                    <span className="text-lg font-bold text-indigo-600">{user.totalAssigned}</span>
+                                    <span className="text-lg font-bold text-[#1B1B19]">{user.totalAssigned}</span>
                                 </div>
                                 <div className="p-4 flex flex-col items-center gap-1">
                                     <span className="text-[9px] font-bold uppercase tracking-tighter text-gray-400">Today</span>

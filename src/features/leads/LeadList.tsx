@@ -1,7 +1,7 @@
 import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLeads } from '../../context/LeadsContext';
-import { Search, Filter, X, Briefcase, Bookmark, MoreHorizontal, Trash2, UserPlus, CheckCircle2 } from 'lucide-react';
+import { Search, Filter, X, Briefcase, Bookmark, MoreHorizontal, Trash2, UserPlus, CheckCircle2, Phone, Car, Edit3, Save, User } from 'lucide-react';
 import { isSameDay, parseISO, format } from 'date-fns';
 import { LeadFilter } from '../../types';
 import { TagInput } from '../../components/TagInput';
@@ -11,9 +11,9 @@ interface LeadListProps {
 }
 
 export function LeadList({ initialFilter = 'all' }: LeadListProps) {
-    const { leads, addSmartList, users, bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads, smartLists, deleteSmartList } = useLeads();
+    const { leads, apiLeads, addSmartList, users, deleteApiLead, approveApiLead, updateApiLead, bulkDeleteLeads, bulkAssignLeads, bulkUpdateLeads, smartLists, deleteSmartList } = useLeads();
 
-    const [currentMode, setCurrentMode] = useState<'all' | 'followup' | 'smartlist'>(initialFilter);
+    const [currentMode, setCurrentMode] = useState<'all' | 'followup' | 'smartlist' | 'apileads'>(initialFilter);
     const [activeSmartListId, setActiveSmartListId] = useState<string | null>(null);
 
     // Selection state
@@ -57,6 +57,46 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
     const [bulkUpdateType, setBulkUpdateType] = useState<'status' | 'type' | 'tags' | 'date' | null>(null);
     const [bulkTagUpdateType, setBulkTagUpdateType] = useState<'add' | 'remove'>('add');
     const [bulkTags, setBulkTags] = useState<string[]>([]);
+
+    // Inline edit state for API lead cards
+    const [editingApiLeadId, setEditingApiLeadId] = useState<string | null>(null);
+    const [editData, setEditData] = useState<Record<string, any>>({});
+    const [editFocus, setEditFocus] = useState<string | null>(null);
+
+    const startEditApiLead = (lead: any) => {
+        setEditingApiLeadId(lead._id);
+        setEditData({
+            name: lead.name || '',
+            phone: lead.phone || '',
+            place: lead.place || '',
+            designation: lead.designation || '',
+            leadOrigin: lead.leadOrigin || '',
+            assignedTo: typeof lead.assignedTo === 'object' ? lead.assignedTo?._id || '' : lead.assignedTo || '',
+            carDetails: lead.carDetails?.map((c: any) => ({
+                intent: c.intent || 'buying',
+                wantedCar: { brandName: c.wantedCar?.brandName || '', modelName: c.wantedCar?.modelName || '' },
+                ownedCar: { brandName: c.ownedCar?.brandName || '', modelName: c.ownedCar?.modelName || '', year: c.ownedCar?.year || '', kmDriven: c.ownedCar?.kmDriven || '' },
+            })) || [],
+        });
+    };
+
+    const cancelEditApiLead = () => {
+        setEditingApiLeadId(null);
+        setEditData({});
+        setEditFocus(null);
+    };
+
+    const saveEditApiLead = async () => {
+        if (!editingApiLeadId) return;
+        await updateApiLead(editingApiLeadId, editData);
+        setEditingApiLeadId(null);
+        setEditData({});
+        setEditFocus(null);
+    };
+
+    // Pagination state
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageSize, setPageSize] = useState(20);
 
     // Get unique tags from all leads for suggestions
     const availableTags = useMemo(() => {
@@ -110,6 +150,20 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
         const activeSmartList = smartLists.find(l => l._id === activeSmartListId);
         const smartListFilter = activeSmartList?.filters;
 
+        if (currentMode === 'apileads') {
+            return apiLeads.filter(lead => {
+                if (searchTerm) {
+                    const searchLower = searchTerm.toLowerCase();
+                    return (
+                        lead.name.toLowerCase().includes(searchLower) ||
+                        lead.phone.includes(searchLower) ||
+                        (lead.place && lead.place.toLowerCase().includes(searchLower))
+                    );
+                }
+                return true;
+            });
+        }
+
         return leads.filter(lead => {
             // Priority: Quick Search
             if (searchTerm) {
@@ -145,7 +199,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                 if (smartListFilter.leadType && smartListFilter.leadType !== 'all' && lead.leadType !== smartListFilter.leadType) return false;
                 if (smartListFilter.leadOrigin && smartListFilter.leadOrigin !== 'all' && lead.leadOrigin !== smartListFilter.leadOrigin) return false;
 
-                if (smartListFilter.paymentStatus && smartListFilter.paymentStatus !== 'all' && lead.paymentStatus !== smartListFilter.paymentStatus) return false;
+                if (smartListFilter.paymentStatus && lead.paymentStatus !== smartListFilter.paymentStatus) return false;
 
                 // Car / intent based filters for smart lists
                 if (
@@ -431,7 +485,19 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
 
             return true;
         });
-    }, [leads, currentMode, activeSmartListId, smartLists, searchTerm, nameFilter, phoneFilter, placeFilter, designationFilter, tagFilterTags, dateFilter, statusFilter, leadTypeFilter, leadOriginFilter, assignedToFilter, paymentStatusFilter, intentFilter, brandFilter, modelFilter, fuelTypeFilter, yearFilter, kmDrivenFilter, kmDrivenOp, amountFilter, amountOp]);
+    }, [leads, apiLeads, currentMode, activeSmartListId, smartLists, searchTerm, nameFilter, phoneFilter, placeFilter, designationFilter, tagFilterTags, dateFilter, statusFilter, leadTypeFilter, leadOriginFilter, assignedToFilter, paymentStatusFilter, intentFilter, brandFilter, modelFilter, fuelTypeFilter, yearFilter, kmDrivenFilter, kmDrivenOp, amountFilter, amountOp]);
+
+    // Reset pagination when filters change
+    useMemo(() => {
+        setCurrentPage(1);
+    }, [searchTerm, nameFilter, phoneFilter, placeFilter, designationFilter, tagFilterTags, dateFilter, statusFilter, leadTypeFilter, leadOriginFilter, assignedToFilter, paymentStatusFilter, intentFilter, brandFilter, modelFilter, fuelTypeFilter, yearFilter, kmDrivenFilter, kmDrivenOp, amountFilter, amountOp, currentMode, activeSmartListId, pageSize]);
+
+    const paginatedLeads = useMemo(() => {
+        const startIndex = (currentPage - 1) * pageSize;
+        return filteredLeads.slice(startIndex, startIndex + pageSize);
+    }, [filteredLeads, currentPage, pageSize]);
+
+    const totalPages = Math.ceil(filteredLeads.length / pageSize);
 
     const handleSelectAll = (checked: boolean) => {
         if (checked) {
@@ -477,8 +543,8 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                 leadOrigin: leadOriginFilter as LeadFilter['leadOrigin'],
                 assignedTo: assignedToFilter,
                 selectedIds: selectedIds.length > 0 ? selectedIds : undefined,
-                paymentStatus: paymentStatusFilter === 'all' ? '' : paymentStatusFilter,
-                intent: intentFilter,
+                paymentStatus: (paymentStatusFilter === 'all' ? '' : paymentStatusFilter) as 'Advance Payment' | 'Full Payment' | '',
+                intent: intentFilter as LeadFilter['intent'],
                 brandName: brandFilter,
                 modelName: modelFilter,
                 fuelType: fuelTypeFilter === 'all' ? '' : fuelTypeFilter,
@@ -522,7 +588,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                 <button
                     onClick={() => { setCurrentMode('all'); setActiveSmartListId(null); }}
                     className={`px-4 py-2 text-xs font-bold whitespace-nowrap rounded-lg transition-all border ${currentMode === 'all'
-                        ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                        ? 'bg-[#1B1B19] border-[#1B1B19] text-white shadow-sm'
                         : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                         }`}
                 >
@@ -533,7 +599,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         <button
                             onClick={() => { setCurrentMode('smartlist'); setActiveSmartListId(list._id!); }}
                             className={`px-4 py-2 text-xs font-bold whitespace-nowrap rounded-lg transition-all flex items-center gap-2 border ${currentMode === 'smartlist' && activeSmartListId === list._id
-                                ? 'bg-indigo-600 border-indigo-600 text-white shadow-sm'
+                                ? 'bg-[#1B1B19] border-[#1B1B19] text-white shadow-sm'
                                 : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-gray-900'
                                 }`}
                         >
@@ -547,6 +613,21 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         </button>
                     </div>
                 ))}
+                {/* Automation New Lead Toggle (aligned to the right) */}
+                <button
+                    onClick={() => { setCurrentMode('apileads'); setActiveSmartListId(null); }}
+                    className={`ml-auto px-4 py-1.5 text-sm font-bold whitespace-nowrap rounded-full transition-all border shadow-sm ${currentMode === 'apileads'
+                        ? 'bg-[#1B1B19] border-[#1B1B19] text-white'
+                        : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
+                        }`}
+                >
+                    Automation New Lead
+                    {apiLeads.length > 0 && (
+                        <span className={`ml-2 px-2 py-0.5 rounded-full text-[10px] ${currentMode === 'apileads' ? 'bg-white text-red-600' : 'bg-red-500 text-white'}`}>
+                            {apiLeads.length}
+                        </span>
+                    )}
+                </button>
             </div>
 
             {/* Action Bar */}
@@ -559,26 +640,30 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                 </div>
                 <div className="flex items-center justify-between gap-4">
                     <div className="flex items-center gap-2 flex-1 max-w-lg">
-                        <div className="relative w-full">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                            <input
-                                type="text"
-                                placeholder="Quick search..."
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                                className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 pl-9 pr-4 text-sm focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
-                            />
-                        </div>
-                        <button
-                            onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                            className={`p-2 rounded-lg border transition-all ${showAdvancedFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
-                        >
-                            <Filter size={20} />
-                        </button>
+                        {currentMode !== 'apileads' && (
+                            <>
+                                <div className="relative w-full">
+                                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
+                                    <input
+                                        type="text"
+                                        placeholder="Quick search..."
+                                        value={searchTerm}
+                                        onChange={(e) => setSearchTerm(e.target.value)}
+                                        className="w-full rounded-lg border border-gray-200 bg-gray-50/50 py-2 pl-9 pr-4 text-sm focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none transition-all"
+                                    />
+                                </div>
+                                <button
+                                    onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                                    className={`p-2 rounded-lg border transition-all ${showAdvancedFilters ? 'bg-indigo-50 border-indigo-200 text-indigo-600' : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'}`}
+                                >
+                                    <Filter size={20} />
+                                </button>
+                            </>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
-                        {selectedIds.length > 0 && (
+                        {selectedIds.length > 0 && currentMode !== 'apileads' && (
                             <button
                                 onClick={() => setIsSmartListModalOpen(true)}
                                 className="flex items-center gap-2 px-3 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold hover:bg-indigo-100 transition-all border border-indigo-100 mr-2"
@@ -589,30 +674,56 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         {selectedIds.length > 0 ? (
                             <div className="flex items-center gap-2 animate-fadeIn">
                                 {/* ... existing buttons ... */}
+                                {currentMode !== 'apileads' && (
+                                    <button
+                                        onClick={() => { setShowBulkAssignPanel(!showBulkAssignPanel); setShowBulkUpdatePanel(false); }}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${showBulkAssignPanel ? 'bg-[#1B1B19] text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                                    >
+                                        <UserPlus size={16} /> Assign
+                                    </button>
+                                )}
+                                {currentMode !== 'apileads' && (
+                                    <button
+                                        onClick={() => { setShowBulkUpdatePanel(!showBulkUpdatePanel); setShowBulkAssignPanel(false); setBulkUpdateType(null); }}
+                                        className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${showBulkUpdatePanel ? 'bg-[#1B1B19] text-white shadow-md' : 'bg-gray-50 text-gray-600 hover:bg-gray-100'}`}
+                                    >
+                                        <MoreHorizontal size={16} /> Update
+                                    </button>
+                                )}
                                 <button
-                                    onClick={() => { setShowBulkAssignPanel(!showBulkAssignPanel); setShowBulkUpdatePanel(false); }}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${showBulkAssignPanel ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
-                                >
-                                    <UserPlus size={16} /> Assign
-                                </button>
-                                <button
-                                    onClick={() => { setShowBulkUpdatePanel(!showBulkUpdatePanel); setShowBulkAssignPanel(false); setBulkUpdateType(null); }}
-                                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-bold transition-all ${showBulkUpdatePanel ? 'bg-indigo-600 text-white shadow-md' : 'bg-indigo-50 text-indigo-600 hover:bg-indigo-100'}`}
-                                >
-                                    <MoreHorizontal size={16} /> Update
-                                </button>
-                                <button
-                                    onClick={handleBulkDelete}
+                                    onClick={async () => {
+                                        if (currentMode === 'apileads') {
+                                            if (window.confirm(`Delete ${selectedIds.length} pending API leads?`)) {
+                                                await Promise.all(selectedIds.map(id => deleteApiLead(id)));
+                                                setSelectedIds([]);
+                                            }
+                                        } else {
+                                            handleBulkDelete();
+                                        }
+                                    }}
                                     className="flex items-center gap-2 px-3 py-2 bg-red-50 text-red-600 rounded-lg text-sm font-bold hover:bg-red-100 transition-all"
                                 >
                                     <Trash2 size={16} /> Delete
                                 </button>
+                                {currentMode === 'apileads' && (
+                                    <button
+                                        onClick={async () => {
+                                            if (window.confirm(`Approve and move ${selectedIds.length} leads to CRM?`)) {
+                                                await Promise.all(selectedIds.map(id => approveApiLead(id)));
+                                                setSelectedIds([]);
+                                            }
+                                        }}
+                                        className="flex items-center gap-2 px-3 py-2 bg-emerald-50 text-emerald-600 rounded-lg text-sm font-bold hover:bg-emerald-100 transition-all border border-emerald-200"
+                                    >
+                                        <CheckCircle2 size={16} /> Add to CRM
+                                    </button>
+                                )}
                             </div>
                         ) : (
-                            hasActiveFilters && (
+                            hasActiveFilters && currentMode !== 'apileads' && (
                                 <button
                                     onClick={() => setIsSmartListModalOpen(true)}
-                                    className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-sm hover:bg-indigo-700 transition-all"
+                                    className="flex items-center gap-2 px-4 py-2 bg-[#1B1B19] text-white rounded-lg text-sm font-bold shadow-sm hover:bg-black transition-all"
                                 >
                                     <Bookmark size={16} /> Save Smart List
                                 </button>
@@ -621,7 +732,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                     </div>
                 </div>
 
-                {showBulkAssignPanel && (
+                {showBulkAssignPanel && currentMode !== 'apileads' && (
                     <div className="flex items-center gap-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100 animate-slideDown">
                         <span className="text-sm font-bold text-indigo-700">Assign selection to:</span>
                         <div className="flex flex-wrap gap-2">
@@ -639,15 +750,15 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                     </div>
                 )}
 
-                {showBulkUpdatePanel && (
+                {showBulkUpdatePanel && currentMode !== 'apileads' && (
                     <div className="flex flex-col gap-3 p-4 bg-indigo-50 rounded-xl border border-indigo-100 animate-slideDown">
                         <div className="flex items-center gap-4">
                             <span className="text-sm font-bold text-indigo-700 whitespace-nowrap">Bulk Update:</span>
                             <div className="flex gap-2">
-                                <button onClick={() => setBulkUpdateType('status')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'status' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Status</button>
-                                <button onClick={() => setBulkUpdateType('type')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'type' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Lead Type</button>
-                                <button onClick={() => setBulkUpdateType('tags')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'tags' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Tags</button>
-                                <button onClick={() => setBulkUpdateType('date')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'date' ? 'bg-indigo-600 text-white border-indigo-600' : 'bg-white text-indigo-600 border-indigo-200 hover:bg-indigo-50'}`}>Follow-up</button>
+                                <button onClick={() => setBulkUpdateType('status')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'status' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Status</button>
+                                <button onClick={() => setBulkUpdateType('type')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'type' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Lead Type</button>
+                                <button onClick={() => setBulkUpdateType('tags')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'tags' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Tags</button>
+                                <button onClick={() => setBulkUpdateType('date')} className={`px-3 py-1 rounded-full text-xs font-bold transition-all border ${bulkUpdateType === 'date' ? 'bg-[#1B1B19] text-white border-[#1B1B19]' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}>Follow-up</button>
                             </div>
                             <button onClick={() => setShowBulkUpdatePanel(false)} className="ml-auto text-indigo-400 hover:text-indigo-600"><X size={18} /></button>
                         </div>
@@ -717,7 +828,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                                             setSelectedIds([]);
                                             setShowBulkUpdatePanel(false);
                                         }}
-                                        className={`px-4 py-1.5 rounded-md text-xs font-bold text-white transition-all ${bulkTags.length > 0 ? (bulkTagUpdateType === 'add' ? 'bg-indigo-600 hover:bg-indigo-700' : 'bg-red-600 hover:bg-red-700') : 'bg-gray-300 cursor-not-allowed'}`}
+                                        className={`px-4 py-1.5 rounded-md text-xs font-bold text-white transition-all ${bulkTags.length > 0 ? (bulkTagUpdateType === 'add' ? 'bg-[#1B1B19] hover:bg-black' : 'bg-red-600 hover:bg-red-700') : 'bg-gray-300 cursor-not-allowed'}`}
                                     >
                                         {bulkTagUpdateType === 'add' ? 'Add Tags' : 'Remove Tags'}
                                     </button>
@@ -745,7 +856,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                     </div>
                 )}
 
-                {showAdvancedFilters && (
+                {showAdvancedFilters && currentMode !== 'apileads' && (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-6 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
                         <input value={nameFilter} onChange={e => setNameFilter(e.target.value)} placeholder="By Name" className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
                         <input value={phoneFilter} onChange={e => setPhoneFilter(e.target.value)} placeholder="By Phone" className="text-sm px-3 py-2 rounded-lg border border-gray-200" />
@@ -816,15 +927,15 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         </select>
                         <select value={leadOriginFilter} onChange={e => setLeadOriginFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
                             <option value="all">Any Origin</option>
-                            <option value="WhatsApp">WhatsApp</option>
-                            <option value="Insta">Instagram</option>
-                            <option value="FB">Facebook</option>
-                            <option value="Walk-in">Walk-in</option>
-                            <option value="Tele">Tele Caller</option>
-                            <option value="Referral">Referral</option>
-                            <option value="Web">Website</option>
-                            <option value="OLX">OLX</option>
-                            <option value="Other">Other</option>
+                            <option value="whatsapp">WhatsApp</option>
+                            <option value="insta">Instagram</option>
+                            <option value="fb">Facebook</option>
+                            <option value="walk-in">Walk-in</option>
+                            <option value="tele">Tele Caller</option>
+                            <option value="referral">Referral</option>
+                            <option value="web">Website</option>
+                            <option value="olx">OLX</option>
+                            <option value="other">Other</option>
                         </select>
                         <select value={assignedToFilter} onChange={e => setAssignedToFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
                             <option value="unassigned">Unassigned</option>
@@ -840,8 +951,8 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         <select value={paymentStatusFilter} onChange={e => setPaymentStatusFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
                             <option value="all">Any Payment</option>
                             <option value="">None</option>
-                            <option value="Advance Payment">Advance Payment</option>
-                            <option value="Full Payment">Full Payment</option>
+                            <option value="advance payment">Advance Payment</option>
+                            <option value="full payment">Full Payment</option>
                         </select>
                         <select value={intentFilter} onChange={e => setIntentFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
                             <option value="all">Any Intent</option>
@@ -903,11 +1014,11 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         </div>
                         <select value={fuelTypeFilter} onChange={e => setFuelTypeFilter(e.target.value)} className="text-sm px-3 py-2 rounded-lg border border-gray-200">
                             <option value="all">Any Fuel</option>
-                            <option value="Petrol">Petrol</option>
-                            <option value="Diesel">Diesel</option>
-                            <option value="Electric">Electric</option>
-                            <option value="Hybrid">Hybrid</option>
-                            <option value="CNG">CNG</option>
+                            <option value="petrol">Petrol</option>
+                            <option value="diesel">Diesel</option>
+                            <option value="electric">Electric</option>
+                            <option value="hybrid">Hybrid</option>
+                            <option value="cng">CNG</option>
                         </select>
                         <input
                             value={yearFilter}
@@ -965,11 +1076,272 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
             </div>
 
             {/* Table Layout */}
-            <div className="overflow-x-auto">
+            {currentMode === 'apileads' ? (
+                <div className="p-4 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-start bg-gray-50/30 overflow-y-auto max-h-[calc(100vh-350px)]">
+                    {paginatedLeads.map(lead => {
+                        const isEditing = editingApiLeadId === lead._id;
+                        return (
+                        <div key={lead._id} className={`bg-white rounded-xl border shadow-sm p-5 hover:shadow-md transition-shadow flex flex-col gap-4 h-fit relative ${isEditing ? 'border-indigo-300 ring-2 ring-indigo-100' : 'border-gray-200'}`}>
+                            <div className="absolute top-4 right-4 flex items-center gap-3">
+                                <span className="text-[10px] font-bold text-gray-300">#{(currentPage - 1) * pageSize + paginatedLeads.indexOf(lead) + 1}</span>
+                                {!isEditing && (
+                                    <button onClick={() => startEditApiLead(lead)} className="p-1 rounded-md hover:bg-gray-100 text-gray-400 hover:text-gray-700 transition-all" title="Edit">
+                                        <Edit3 size={14} />
+                                    </button>
+                                )}
+                                <input
+                                    type="checkbox"
+                                    checked={selectedIds.includes(lead._id!)}
+                                    onChange={e => handleSelectLead(lead._id!, e.target.checked)}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                            </div>
+
+                            {isEditing ? (
+                                /* ─── EDIT MODE ─── */
+                                <div className="flex flex-col gap-3 pr-8">
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Name</label>
+                                        <input value={editData.name} onChange={e => setEditData(d => ({ ...d, name: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm font-bold focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition-all" />
+                                    </div>
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Phone</label>
+                                        <input value={editData.phone} onChange={e => setEditData(d => ({ ...d, phone: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition-all" />
+                                    </div>
+
+                                    {/* Place with suggestions */}
+                                    <div className="flex flex-col gap-1.5 relative">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Place</label>
+                                        <input value={editData.place} onChange={e => setEditData(d => ({ ...d, place: e.target.value }))} onFocus={() => setEditFocus('place')} onBlur={() => setTimeout(() => setEditFocus(null), 150)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition-all" />
+                                        {editFocus === 'place' && availablePlaces.filter(p => !editData.place || p.toLowerCase().includes(editData.place.toLowerCase())).length > 0 && (
+                                            <div className="absolute top-full left-0 z-50 mt-1 w-full max-h-32 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                {availablePlaces.filter(p => !editData.place || p.toLowerCase().includes(editData.place.toLowerCase())).map(p => (
+                                                    <button key={p} type="button" onMouseDown={() => setEditData(d => ({ ...d, place: p }))} className="w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50 transition-colors">{p}</button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Designation with suggestions */}
+                                    <div className="flex flex-col gap-1.5 relative">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Designation</label>
+                                        <input value={editData.designation} onChange={e => setEditData(d => ({ ...d, designation: e.target.value }))} onFocus={() => setEditFocus('designation')} onBlur={() => setTimeout(() => setEditFocus(null), 150)} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition-all" />
+                                        {editFocus === 'designation' && availableDesignations.filter(d => !editData.designation || d.toLowerCase().includes(editData.designation.toLowerCase())).length > 0 && (
+                                            <div className="absolute top-full left-0 z-50 mt-1 w-full max-h-32 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                {availableDesignations.filter(d => !editData.designation || d.toLowerCase().includes(editData.designation.toLowerCase())).map(d => (
+                                                    <button key={d} type="button" onMouseDown={() => setEditData(dd => ({ ...dd, designation: d }))} className="w-full px-3 py-1.5 text-left text-sm hover:bg-indigo-50 transition-colors">{d}</button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Lead Origin */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider">Source</label>
+                                        <select value={editData.leadOrigin} onChange={e => setEditData(d => ({ ...d, leadOrigin: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition-all">
+                                            <option value="">Select Origin</option>
+                                            <option value="whatsapp">WhatsApp</option><option value="insta">Instagram</option><option value="fb">Facebook</option>
+                                            <option value="walk-in">Walk-in</option><option value="tele">Tele Caller</option><option value="referral">Referral</option>
+                                            <option value="web">Website</option><option value="olx">OLX</option><option value="other">Other</option>
+                                        </select>
+                                    </div>
+
+                                    {/* Assign User */}
+                                    <div className="flex flex-col gap-1.5">
+                                        <label className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><User size={10} /> Assign To</label>
+                                        <select value={editData.assignedTo} onChange={e => setEditData(d => ({ ...d, assignedTo: e.target.value }))} className="w-full rounded-lg border border-gray-200 px-3 py-2 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 outline-none transition-all">
+                                            <option value="">Unassigned</option>
+                                            {users.map(u => <option key={u._id} value={u._id}>{u.username}</option>)}
+                                        </select>
+                                    </div>
+
+                                    {/* Vehicle Details */}
+                                    {editData.carDetails?.length > 0 && (
+                                        <div className="flex flex-col gap-2 mt-1">
+                                            <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wider flex items-center gap-1"><Car size={10}/> Vehicles</span>
+                                            {editData.carDetails.map((car: any, idx: number) => (
+                                                <div key={idx} className="p-3 rounded-lg border border-indigo-100 bg-indigo-50/20 flex flex-col gap-2">
+                                                    <select value={car.intent} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], intent: e.target.value }; setEditData(d => ({ ...d, carDetails: cd })); }} className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs">
+                                                        <option value="buying">Buying</option><option value="selling">Selling</option><option value="exchange">Exchange</option>
+                                                    </select>
+                                                    {car.intent !== 'selling' && (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase">Wanted Car</span>
+                                                            <div className="flex gap-1.5 relative">
+                                                                <div className="flex-1 relative">
+                                                                    <input placeholder="Brand" value={car.wantedCar?.brandName || ''} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], wantedCar: { ...cd[idx].wantedCar, brandName: e.target.value } }; setEditData(d => ({ ...d, carDetails: cd })); }} onFocus={() => setEditFocus(`wb${idx}`)} onBlur={() => setTimeout(() => setEditFocus(null), 150)} className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs" />
+                                                                    {editFocus === `wb${idx}` && availableBrandNames.filter(b => !car.wantedCar?.brandName || b.toLowerCase().includes((car.wantedCar?.brandName || '').toLowerCase())).length > 0 && (
+                                                                        <div className="absolute top-full left-0 z-50 mt-1 w-full max-h-28 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                                            {availableBrandNames.filter(b => !car.wantedCar?.brandName || b.toLowerCase().includes((car.wantedCar?.brandName || '').toLowerCase())).map(b => (
+                                                                                <button key={b} type="button" onMouseDown={() => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], wantedCar: { ...cd[idx].wantedCar, brandName: b } }; setEditData(d => ({ ...d, carDetails: cd })); }} className="w-full px-2 py-1 text-left text-xs hover:bg-indigo-50">{b}</button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 relative">
+                                                                    <input placeholder="Model" value={car.wantedCar?.modelName || ''} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], wantedCar: { ...cd[idx].wantedCar, modelName: e.target.value } }; setEditData(d => ({ ...d, carDetails: cd })); }} onFocus={() => setEditFocus(`wm${idx}`)} onBlur={() => setTimeout(() => setEditFocus(null), 150)} className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs" />
+                                                                    {editFocus === `wm${idx}` && availableModelNames.filter(m => !car.wantedCar?.modelName || m.toLowerCase().includes((car.wantedCar?.modelName || '').toLowerCase())).length > 0 && (
+                                                                        <div className="absolute top-full left-0 z-50 mt-1 w-full max-h-28 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                                            {availableModelNames.filter(m => !car.wantedCar?.modelName || m.toLowerCase().includes((car.wantedCar?.modelName || '').toLowerCase())).map(m => (
+                                                                                <button key={m} type="button" onMouseDown={() => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], wantedCar: { ...cd[idx].wantedCar, modelName: m } }; setEditData(d => ({ ...d, carDetails: cd })); }} className="w-full px-2 py-1 text-left text-xs hover:bg-indigo-50">{m}</button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                    {car.intent !== 'buying' && (
+                                                        <div className="flex flex-col gap-1">
+                                                            <span className="text-[9px] font-bold text-gray-400 uppercase">Owned Car</span>
+                                                            <div className="flex gap-1.5 relative">
+                                                                <div className="flex-1 relative">
+                                                                    <input placeholder="Brand" value={car.ownedCar?.brandName || ''} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], ownedCar: { ...cd[idx].ownedCar, brandName: e.target.value } }; setEditData(d => ({ ...d, carDetails: cd })); }} onFocus={() => setEditFocus(`ob${idx}`)} onBlur={() => setTimeout(() => setEditFocus(null), 150)} className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs" />
+                                                                    {editFocus === `ob${idx}` && availableBrandNames.filter(b => !car.ownedCar?.brandName || b.toLowerCase().includes((car.ownedCar?.brandName || '').toLowerCase())).length > 0 && (
+                                                                        <div className="absolute top-full left-0 z-50 mt-1 w-full max-h-28 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                                            {availableBrandNames.filter(b => !car.ownedCar?.brandName || b.toLowerCase().includes((car.ownedCar?.brandName || '').toLowerCase())).map(b => (
+                                                                                <button key={b} type="button" onMouseDown={() => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], ownedCar: { ...cd[idx].ownedCar, brandName: b } }; setEditData(d => ({ ...d, carDetails: cd })); }} className="w-full px-2 py-1 text-left text-xs hover:bg-indigo-50">{b}</button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                                <div className="flex-1 relative">
+                                                                    <input placeholder="Model" value={car.ownedCar?.modelName || ''} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], ownedCar: { ...cd[idx].ownedCar, modelName: e.target.value } }; setEditData(d => ({ ...d, carDetails: cd })); }} onFocus={() => setEditFocus(`om${idx}`)} onBlur={() => setTimeout(() => setEditFocus(null), 150)} className="w-full rounded-md border border-gray-200 px-2 py-1 text-xs" />
+                                                                    {editFocus === `om${idx}` && availableModelNames.filter(m => !car.ownedCar?.modelName || m.toLowerCase().includes((car.ownedCar?.modelName || '').toLowerCase())).length > 0 && (
+                                                                        <div className="absolute top-full left-0 z-50 mt-1 w-full max-h-28 overflow-y-auto rounded-lg border border-gray-200 bg-white shadow-lg">
+                                                                            {availableModelNames.filter(m => !car.ownedCar?.modelName || m.toLowerCase().includes((car.ownedCar?.modelName || '').toLowerCase())).map(m => (
+                                                                                <button key={m} type="button" onMouseDown={() => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], ownedCar: { ...cd[idx].ownedCar, modelName: m } }; setEditData(d => ({ ...d, carDetails: cd })); }} className="w-full px-2 py-1 text-left text-xs hover:bg-indigo-50">{m}</button>
+                                                                            ))}
+                                                                        </div>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <div className="flex gap-1.5">
+                                                                <input placeholder="Year" value={car.ownedCar?.year || ''} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], ownedCar: { ...cd[idx].ownedCar, year: e.target.value } }; setEditData(d => ({ ...d, carDetails: cd })); }} className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs" />
+                                                                <input placeholder="KM" value={car.ownedCar?.kmDriven || ''} onChange={e => { const cd = [...editData.carDetails]; cd[idx] = { ...cd[idx], ownedCar: { ...cd[idx].ownedCar, kmDriven: e.target.value } }; setEditData(d => ({ ...d, carDetails: cd })); }} className="flex-1 rounded-md border border-gray-200 px-2 py-1 text-xs" />
+                                                            </div>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Save / Cancel */}
+                                    <div className="flex gap-2 mt-2">
+                                        <button onClick={cancelEditApiLead} className="flex-1 px-3 py-2 bg-gray-100 text-gray-600 rounded-lg text-xs font-bold hover:bg-gray-200 transition-all">Cancel</button>
+                                        <button onClick={saveEditApiLead} className="flex-1 px-3 py-2 bg-[#1B1B19] text-white rounded-lg text-xs font-bold hover:bg-black transition-all flex items-center justify-center gap-1.5 shadow-sm"><Save size={14}/> Save</button>
+                                    </div>
+                                </div>
+                            ) : (
+                                /* ─── VIEW MODE ─── */
+                                <>
+                                    <div className="flex flex-col gap-1 pr-8">
+                                        <button
+                                            onClick={() => navigate(`/contact/${lead._id}`)}
+                                            className="font-bold text-lg text-gray-900 hover:text-indigo-600 text-left leading-tight"
+                                        >
+                                            {lead.name}
+                                        </button>
+                                        <a href={`tel:${lead.phone}`} className="text-sm text-indigo-600 font-medium flex items-center gap-1.5 hover:underline w-fit">
+                                            <Phone size={14}/> {lead.phone}
+                                        </a>
+                                    </div>
+
+                                    {(lead.place || lead.designation || lead.leadOrigin) && (
+                                        <div className="flex flex-col gap-2 p-3 bg-gray-50 rounded-lg text-xs">
+                                            {lead.place && <div className="flex items-center justify-between"><span className="text-gray-500">Place</span><span className="font-bold text-gray-700">{lead.place}</span></div>}
+                                            {lead.designation && <div className="flex items-center justify-between"><span className="text-gray-500">Designation</span><span className="font-bold text-gray-700">{lead.designation}</span></div>}
+                                            {lead.leadOrigin && <div className="flex items-center justify-between"><span className="text-gray-500">Source</span><span className="font-bold text-gray-700">{lead.leadOrigin}</span></div>}
+                                        </div>
+                                    )}
+
+                                    {/* Assigned User Display */}
+                                    {lead.assignedTo && (
+                                        <div className="flex items-center gap-2 text-xs">
+                                            <div className="h-5 w-5 rounded-full bg-indigo-100 flex items-center justify-center text-[9px] font-bold text-indigo-600">
+                                                {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username?.charAt(0) : '?'}
+                                            </div>
+                                            <span className="font-medium text-gray-600">
+                                                {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Assigned'}
+                                            </span>
+                                        </div>
+                                    )}
+
+                                    {lead.carDetails && lead.carDetails.length > 0 && (
+                                        <div className="flex flex-col gap-2">
+                                            <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider flex items-center gap-1"><Car size={12}/> Vehicles ({lead.carDetails.length})</span>
+                                            {lead.carDetails.map((car, idx) => (
+                                                <div key={idx} className="text-xs p-2.5 rounded-lg border border-indigo-50 bg-indigo-50/30 flex flex-col gap-1">
+                                                    <span className="font-bold text-indigo-900 capitalize">{car.intent}</span>
+                                                    {car.wantedCar && car.intent !== 'selling' && (
+                                                        <div className="text-gray-600">Want: <span className="font-medium text-gray-900 truncate block">{car.wantedCar.brandName} {car.wantedCar.modelName}</span></div>
+                                                    )}
+                                                    {car.ownedCar && car.intent !== 'buying' && (
+                                                        <div className="text-gray-600">
+                                                            Own: <span className="font-medium text-gray-900 truncate block">{car.ownedCar.brandName} {car.ownedCar.modelName}</span>
+                                                            {(car.ownedCar.year || car.ownedCar.kmDriven) && (
+                                                                <div className="flex gap-2 text-[10px] mt-1 text-gray-500 font-medium">
+                                                                    {car.ownedCar.year && <span className="bg-white px-1.5 py-0.5 rounded border border-gray-100">{car.ownedCar.year}</span>}
+                                                                    {car.ownedCar.kmDriven && <span className="bg-white px-1.5 py-0.5 rounded border border-gray-100">{car.ownedCar.kmDriven} km</span>}
+                                                                </div>
+                                                            )}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {lead.notes && lead.notes.length > 0 && (
+                                        <div className="flex flex-col gap-1.5">
+                                            <span className="text-[10px] font-bold text-gray-700 uppercase tracking-wider">Latest Note</span>
+                                            <div className="text-xs text-gray-700 bg-yellow-50/50 p-2.5 rounded-lg border border-yellow-100 italic line-clamp-3">
+                                                {lead.notes[lead.notes.length - 1]}
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="mt-auto pt-4 border-t border-gray-100 flex items-center gap-2">
+                                        <button
+                                            onClick={() => startEditApiLead(lead)}
+                                            className="px-3 py-2 bg-gray-50 text-gray-600 rounded-lg hover:bg-gray-100 transition-all font-bold text-xs flex items-center gap-1.5 border border-gray-200"
+                                        >
+                                            <Edit3 size={14}/> Edit
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                if (window.confirm('Delete this pending lead?')) {
+                                                    deleteApiLead(lead._id!);
+                                                }
+                                            }}
+                                            className="px-3 py-2 bg-red-50 text-red-500 rounded-lg hover:bg-red-100 transition-all font-bold text-xs"
+                                        >
+                                            Delete
+                                        </button>
+                                        <button 
+                                            onClick={() => {
+                                                if (window.confirm('Approve this lead and add to CRM?')) {
+                                                    approveApiLead(lead._id!);
+                                                }
+                                            }}
+                                            className="flex-1 px-3 py-2 bg-emerald-50 text-emerald-600 text-xs font-bold rounded-lg hover:bg-emerald-100 transition-all border border-emerald-100 flex items-center justify-center gap-1.5 shadow-sm"
+                                        >
+                                            <CheckCircle2 size={16}/> Add to CRM
+                                        </button>
+                                    </div>
+                                </>
+                            )}
+                        </div>
+                        );
+                    })}
+                </div>
+            ) : (
+            <div className="overflow-x-auto overflow-y-auto max-h-[calc(100vh-350px)]">
                 <table className="w-full text-left border-collapse">
-                    <thead className="bg-gray-50/50 border-b border-gray-100">
+                    <thead className="bg-gray-50/50 border-b border-gray-100 sticky top-0 z-10">
                         <tr>
-                            <th className="p-4 w-10 border-r border-gray-100 text-center">
+                            <th className="p-4 w-10 border-r border-gray-100 text-center bg-gray-50/50">
                                 <input
                                     type="checkbox"
                                     checked={selectedIds.length === filteredLeads.length && filteredLeads.length > 0}
@@ -977,17 +1349,18 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                                     className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 cursor-pointer"
                                 />
                             </th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Contact Name</th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Phone</th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Type</th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Status</th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Assigned To</th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Tags</th>
-                            <th className="p-4 text-xs font-bold text-gray-400 uppercase tracking-wider">Created</th>
+                            <th className="p-4 text-[10px] font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50 w-8">#</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Contact Name</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Phone</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Type</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Status</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Assigned To</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Tags</th>
+                            <th className="p-4 text-xs font-bold text-gray-700 uppercase tracking-wider bg-gray-50/50">Created</th>
                         </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-50">
-                        {filteredLeads.map(lead => (
+                        {paginatedLeads.map(lead => (
                             <tr key={lead._id} className="hover:bg-indigo-50/30 transition-all group">
                                 <td className="p-4">
                                     <input
@@ -997,6 +1370,9 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                                         className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
                                     />
                                 </td>
+                                <td className="p-4 text-[10px] font-bold text-gray-300">
+                                    {(currentPage - 1) * pageSize + paginatedLeads.indexOf(lead) + 1}
+                                </td>
                                 <td className="p-4">
                                     <div className="flex flex-col">
                                         <button
@@ -1005,10 +1381,10 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                                         >
                                             {lead.name}
                                         </button>
-                                        <span className="text-[10px] text-gray-400">
+                                        <span className="text-[10px] text-gray-700">
                                             {lead.place || 'None'}
                                         </span>
-                                        <div className="flex items-center gap-1 text-[11px] text-gray-400 mt-0.5">
+                                        <div className="flex items-center gap-1 text-[11px] text-gray-700 mt-0.5">
                                             <Briefcase size={10} />
                                             <span>{lead.designation || 'None'}</span>
                                         </div>
@@ -1057,6 +1433,75 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                     </tbody>
                 </table>
             </div>
+            )}
+            {/* Pagination Sidebar/Footer */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 p-4 border-t border-gray-100 bg-gray-50/50">
+                <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-500 uppercase">Per Page:</span>
+                        <div className="flex gap-1">
+                            {[20, 100].map(size => (
+                                <button
+                                    key={size}
+                                    onClick={() => setPageSize(size)}
+                                    className={`px-3 py-1 text-xs font-bold rounded-md border transition-all ${pageSize === size
+                                        ? 'bg-[#1B1B19] border-[#1B1B19] text-white shadow-sm'
+                                        : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    {size}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <span className="text-xs font-bold text-gray-700">
+                        Showing {filteredLeads.length > 0 ? (currentPage - 1) * pageSize + 1 : 0} to {Math.min(currentPage * pageSize, filteredLeads.length)} of {filteredLeads.length}
+                    </span>
+                </div>
+
+                {totalPages > 1 && (
+                    <div className="flex items-center gap-2">
+                        <button
+                            disabled={currentPage === 1}
+                            onClick={() => setCurrentPage(prev => prev - 1)}
+                            className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-all font-bold text-xs"
+                        >
+                            Previous
+                        </button>
+                        <div className="flex items-center gap-1">
+                            {Array.from({ length: totalPages }, (_, i) => i + 1)
+                                .filter(page => {
+                                    if (totalPages <= 7) return true;
+                                    return page === 1 || page === totalPages || Math.abs(page - currentPage) <= 1;
+                                })
+                                .map((page, idx, array) => (
+                                    <div key={page} className="flex items-center gap-1">
+                                        {idx > 0 && array[idx - 1] !== page - 1 && (
+                                            <span className="text-gray-700">...</span>
+                                        )}
+                                        <button
+                                            onClick={() => setCurrentPage(page)}
+                                            className={`w-8 h-8 flex items-center justify-center rounded-lg border text-xs font-bold transition-all ${currentPage === page
+                                                ? 'bg-[#1B1B19] border-[#1B1B19] text-white shadow-sm'
+                                                : 'bg-white border-gray-200 text-gray-500 hover:bg-gray-50'
+                                                }`}
+                                        >
+                                            {page}
+                                        </button>
+                                    </div>
+                                ))}
+                        </div>
+                        <button
+                            disabled={currentPage === totalPages}
+                            onClick={() => setCurrentPage(prev => prev + 1)}
+                            className="p-2 rounded-lg border border-gray-200 bg-white text-gray-500 hover:bg-gray-50 disabled:opacity-50 transition-all font-bold text-xs"
+                        >
+                            Next
+                        </button>
+                    </div>
+                )}
+            </div>
+
             {/* Empty State */}
             {filteredLeads.length === 0 && (
                 <div className="flex flex-col items-center justify-center py-20 bg-gray-50/30">
@@ -1074,7 +1519,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                     <div className="w-full max-w-md rounded-2xl bg-white p-6 shadow-2xl animate-fadeIn">
                         <div className="flex items-center justify-between mb-4">
                             <h3 className="text-lg font-bold text-gray-900">Save Smart List</h3>
-                            <button onClick={() => setIsSmartListModalOpen(false)}><X size={20} className="text-gray-400" /></button>
+                            <button onClick={() => setIsSmartListModalOpen(false)}><X size={20} className="text-gray-700" /></button>
                         </div>
                         <input
                             autoFocus
@@ -1085,7 +1530,7 @@ export function LeadList({ initialFilter = 'all' }: LeadListProps) {
                         />
                         <div className="flex justify-end gap-3 mt-6">
                             <button onClick={() => setIsSmartListModalOpen(false)} className="px-4 py-2 font-semibold text-gray-500 hover:text-gray-900">Cancel</button>
-                            <button onClick={handleSaveSmartList} disabled={!smartListName} className="rounded-xl bg-indigo-600 px-6 py-2.5 font-bold text-white shadow-md hover:bg-indigo-700 disabled:opacity-50 transition-all active:scale-95">Save List</button>
+                            <button onClick={handleSaveSmartList} disabled={!smartListName} className="rounded-xl bg-[#1B1B19] px-6 py-2.5 font-bold text-white shadow-md hover:bg-black disabled:opacity-50 transition-all active:scale-95">Save List</button>
                         </div>
                     </div>
                 </div>

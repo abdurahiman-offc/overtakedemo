@@ -3,12 +3,10 @@ import { useNavigate } from 'react-router-dom';
 import { useLeads } from '../../context/LeadsContext';
 import { motion, AnimatePresence } from 'framer-motion';
 import { format, isSameDay, parseISO, startOfDay, differenceInDays } from 'date-fns';
-import { Phone, MapPin, Calendar as CalendarIcon, Clock, CheckCircle2, Briefcase, AlertCircle, User, Tag, Edit3, Eye, Plus, Filter, Zap, PhoneCall, Users, X } from 'lucide-react';
+import { Phone, Calendar as CalendarIcon, Clock, CheckCircle2, AlertCircle, User, Eye, Plus, Filter, Zap, PhoneCall, Users, CreditCard } from 'lucide-react';
 import { Lead } from '../../types';
-import { LeadFormModal } from '../leads/LeadFormModal';
-
 export function FollowupsView() {
-    const { leads, users, updateLead, completeFollowup } = useLeads();
+    const { leads, users, updateLead } = useLeads();
     const navigate = useNavigate();
 
     // Filters & Tabs
@@ -31,7 +29,7 @@ export function FollowupsView() {
 
     const filteredLeads = useMemo(() => {
         return leads.filter(lead => {
-            if (!lead.followupDate || lead.status === 'closed' || lead.status === 'lost') return false;
+            if (!lead.followupDate || lead.status === 'sold' || lead.status === 'deal_closed') return false;
 
             // Apply assignee filter
             if (assigneeFilter !== 'all') {
@@ -125,9 +123,6 @@ export function FollowupsView() {
         setDraggedLead(null);
     };
 
-
-    const [editingLead, setEditingLead] = useState<Lead | null>(null);
-
     return (
         <div className="flex flex-col gap-6">
 
@@ -141,9 +136,10 @@ export function FollowupsView() {
                             key={tab.id}
                             /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
                             onClick={() => setActiveTab(tab.id as any)}
-                            className={`flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 ${activeTab === tab.id
-                                ? `bg-white text-gray-900 shadow-sm border border-gray-200`
-                                : `text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent`
+                            className={`flex flex-1 md:flex-none items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold text-sm transition-all duration-200 ${
+                                activeTab === tab.id
+                                    ? `${tab.activeBg} ${tab.border} text-gray-900 shadow-sm`
+                                    : `text-gray-500 hover:text-gray-700 hover:bg-gray-100 border border-transparent`
                                 }`}
                         >
                             <tab.icon size={16} className={activeTab === tab.id ? tab.color : 'text-gray-400'} />
@@ -166,7 +162,7 @@ export function FollowupsView() {
                             type="date"
                             value={specificDateFilter}
                             onChange={(e) => setSpecificDateFilter(e.target.value)}
-                            className="flex-1 md:flex-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-colors"
+                            className="flex-1 md:flex-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium focus:border-[#1B1B19] focus:outline-none transition-colors"
                         />
                         {specificDateFilter && (
                             <button
@@ -182,7 +178,7 @@ export function FollowupsView() {
                     <select
                         value={assigneeFilter}
                         onChange={(e) => setAssigneeFilter(e.target.value)}
-                        className="flex-1 md:flex-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium focus:border-indigo-500 focus:outline-none transition-colors min-w-[150px]"
+                        className="flex-1 md:flex-none rounded-xl border border-gray-200 bg-gray-50 px-4 py-2 text-sm font-medium focus:border-[#1B1B19] focus:outline-none transition-colors min-w-[150px]"
                     >
                         <option value="all">Assignee: All</option>
                         <option value="unassigned">Unassigned</option>
@@ -204,15 +200,25 @@ export function FollowupsView() {
                             key={column.id}
                             onDragOver={handleDragOver}
                             onDrop={(e) => handleDrop(e, column.id)}
-                            className={`flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50/50 p-4 overflow-hidden min-w-[320px] transition-colors ${draggedLead && draggedLead.leadType !== column.id ? 'bg-indigo-50/30 border-dashed border-indigo-200' : ''}`}
-                        >
+                            className={`flex flex-col gap-4 rounded-2xl border border-gray-100 bg-gray-50/50 p-4 overflow-hidden min-w-[320px] transition-colors ${draggedLead && draggedLead.leadType !== column.id ? 'bg-gray-100 border-dashed border-gray-300' : ''}`}
+                            >
                             <div className="flex items-center justify-between px-2">
                                 <div className="flex items-center gap-2">
                                     <div className={`p-1.5 rounded-lg ${column.bg} ${column.color}`}>
                                         <column.icon size={18} />
                                     </div>
-                                    <h3 className="font-bold text-gray-900">{column.title} Leads</h3>
-                                    <span className="text-xs font-bold text-indigo-600 bg-indigo-50 px-2.5 py-0.5 rounded-full border border-indigo-100">
+                                    <h3
+                                        className={
+                                            column.id === 'hot'
+                                                ? 'font-bold text-xs uppercase tracking-wide px-3 py-1 rounded-full shadow-sm bg-red-500 text-white'
+                                                : column.id === 'warm'
+                                                ? 'font-bold text-xs uppercase tracking-wide px-3 py-1 rounded-full shadow-sm bg-amber-400 text-white'
+                                                : 'font-bold text-xs uppercase tracking-wide px-3 py-1 rounded-full shadow-sm bg-blue-500 text-white'
+                                        }
+                                    >
+                                        {column.title} Leads
+                                    </h3>
+                                    <span className="text-xs font-bold text-gray-700 bg-gray-100 px-2.5 py-0.5 rounded-full border border-gray-200">
                                         {columnLeads.length}
                                     </span>
                                 </div>
@@ -245,72 +251,88 @@ export function FollowupsView() {
                                                     onDragStart={(e) => handleDragStart(e as any, lead)}
                                                     /* eslint-disable-next-line @typescript-eslint/no-explicit-any */
                                                     onDragEnd={(e) => handleDragEnd(e as any)}
-                                                    className="group relative rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-indigo-200 hover:shadow-md flex flex-col gap-3 cursor-grab active:cursor-grabbing"
+                                                    className="group relative rounded-xl border border-gray-100 bg-white p-4 shadow-sm transition-all hover:border-gray-200 hover:shadow-md flex flex-col gap-3 cursor-grab active:cursor-grabbing"
                                                 >
-                                                    <div className="flex justify-between items-start">
-                                                        <div className="flex flex-col">
-                                                            <h4 className="font-bold text-gray-900 truncate leading-tight">{lead.name}</h4>
-                                                            <div className="flex items-center gap-1.5 text-[10px] font-semibold text-gray-500 mt-1">
-                                                                <span className="flex items-center gap-1"><Phone size={10} /> {lead.phone}</span>
-                                                                <>
-                                                                    <span>•</span>
-                                                                    <span className="flex items-center gap-1"><MapPin size={10} /> {lead.place || "None"}</span>
-                                                                </>
-                                                                <>
-                                                                    <span>•</span>
-                                                                    <span className="flex items-center gap-1"><Briefcase size={10} /> {lead.designation || "None"}</span>
-                                                                </>
-                                                            </div>
+                                                    <div className="flex justify-between items-start gap-3">
+                                                        <div className="flex flex-col min-w-0">
+                                                            <h4 className="font-bold text-gray-900 truncate leading-tight" title={lead.name}>
+                                                                {lead.name}
+                                                            </h4>
                                                         </div>
-                                                        <div className="flex gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); completeFollowup(lead._id, undefined, 'not_responded'); }}
-                                                                className="p-1.5 rounded-lg border border-gray-200 bg-white text-gray-400 hover:text-gray-600 hover:bg-gray-50 shadow-sm transition-all"
-                                                                title="Not Responded"
-                                                            >
-                                                                <X size={14} />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); completeFollowup(lead._id, undefined, 'responded'); }}
-                                                                className={`p-1.5 rounded-lg border border-transparent shadow-sm transition-all ${activeTab === 'missed' ? 'text-red-600 bg-red-50 hover:bg-red-100 hover:border-red-200' : 'text-emerald-600 bg-emerald-50 hover:bg-emerald-100 hover:border-emerald-200'}`}
-                                                                title="Complete Follow-up"
-                                                            >
-                                                                <CheckCircle2 size={14} />
-                                                            </button>
-                                                            <button
-                                                                onClick={(e) => { e.stopPropagation(); setEditingLead(lead); }}
-                                                                className="p-1.5 text-gray-400 hover:text-indigo-600 rounded-lg hover:bg-indigo-50 border border-transparent hover:border-indigo-100"
-                                                            >
-                                                                <Edit3 size={14} />
-                                                            </button>
-                                                        </div>
+                                                        <span className="text-[9px] font-bold text-gray-600 bg-gray-50 px-1.5 py-0.5 rounded-full border border-gray-200 uppercase tracking-wider shrink-0">
+                                                            {lead.leadOrigin}
+                                                        </span>
                                                     </div>
 
-                                                    <div className="flex items-center justify-between border-y border-gray-50 py-2">
-                                                        <span className="text-[9px] font-bold text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 uppercase tracking-wider">{lead.leadOrigin}</span>
-
+                                                    <div className="flex flex-col gap-1.5 mt-1 border-b border-gray-50 pb-2">
+                                                        <div className="flex items-center gap-1.5 text-[11px] font-medium text-gray-600">
+                                                            <Phone size={11} className="text-gray-400" />
+                                                            <span className="truncate">{lead.phone}</span>
+                                                        </div>
+                                                        <div className="flex items-center gap-1.5 text-[10px] text-gray-500">
+                                                            <CalendarIcon size={11} className="text-gray-400" />
+                                                            <span>{new Date(lead.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
+                                                        </div>
                                                         <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-600">
-                                                            <User size={12} className="text-gray-400" />
-                                                            {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Unassigned'}
+                                                            <User size={11} className="text-gray-400" />
+                                                            <span className="truncate">
+                                                                {typeof lead.assignedTo === 'object' ? lead.assignedTo?.username : 'Unassigned'}
+                                                            </span>
                                                         </div>
+                                                        {lead.paymentStatus && (
+                                                            <div className="flex items-center gap-1.5 text-[10px] font-medium text-gray-600 mt-0.5">
+                                                                <CreditCard size={11} className={(lead.paymentStatus === 'Full Payment' || lead.paymentStatus === 'Advance Payment') ? "text-emerald-500" : "text-gray-400"} />
+                                                                <span className={`px-1.5 py-0.5 rounded-sm capitalize font-bold tracking-wider ${(lead.paymentStatus === 'Full Payment' || lead.paymentStatus === 'Advance Payment') ? "bg-emerald-100 text-emerald-700" : "bg-gray-100 text-gray-700"}`}>
+                                                                    {lead.paymentStatus}
+                                                                </span>
+                                                            </div>
+                                                        )}
                                                     </div>
 
-                                                    {
-                                                        lead.tags && lead.tags.length > 0 && (
-                                                            <div className="flex flex-wrap gap-1">
-                                                                {lead.tags.slice(0, 3).map((tag, idx) => (
-                                                                    <span key={idx} className="flex items-center gap-1 text-[9px] font-bold text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded-md border border-gray-200">
-                                                                        <Tag size={8} className="text-gray-400" /> {tag}
+                                                    {lead.carDetails && lead.carDetails.length > 0 && (
+                                                        <div className="flex flex-col gap-1">
+                                                            {lead.carDetails.map((c, idx) => {
+                                                                if (c.intent === 'exchange') {
+                                                                    return (
+                                                                        <span key={idx} className="text-[11px]">
+                                                                            <span className="font-semibold text-[#1B1B19] uppercase text-[10px] mr-1">Exchange:</span>
+                                                                            {(c.ownedCar?.brandName || c.brandName) && (
+                                                                                <span className="text-gray-700">
+                                                                                    {c.ownedCar?.brandName || c.brandName} {c.ownedCar?.modelName || c.modelName}
+                                                                                </span>
+                                                                            )}
+                                                                            <span className="text-gray-400 font-bold mx-1">→</span>
+                                                                            {(c.wantedCar?.brandName || c.brandName) && (
+                                                                                <span className="text-gray-700">
+                                                                                    {c.wantedCar?.brandName || c.brandName} {c.wantedCar?.modelName || c.modelName}
+                                                                                </span>
+                                                                            )}
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                if (c.intent === 'buying') {
+                                                                    return (
+                                                                        <span key={idx} className="text-[11px]">
+                                                                            <span className="font-semibold text-blue-600 uppercase text-[10px] mr-1">Buy:</span>
+                                                                            <span className="text-gray-700">
+                                                                                {(c.wantedCar?.brandName || c.brandName) || 'Any'} {(c.wantedCar?.modelName || c.modelName) || ''}
+                                                                            </span>
+                                                                        </span>
+                                                                    );
+                                                                }
+                                                                return (
+                                                                    <span key={idx} className="text-[11px]">
+                                                                        <span className="font-semibold text-amber-600 uppercase text-[10px] mr-1">Sell:</span>
+                                                                        <span className="text-gray-700">
+                                                                            {(c.ownedCar?.brandName || c.brandName) || 'Any'} {(c.ownedCar?.modelName || c.modelName) || ''}
+                                                                        </span>
                                                                     </span>
-                                                                ))}
-                                                                {lead.tags.length > 3 && (
-                                                                    <span className="text-[9px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded-md border border-gray-200">+{lead.tags.length - 3}</span>
-                                                                )}
-                                                            </div>
-                                                        )
-                                                    }
+                                                                );
+                                                            })}
+                                                        </div>
+                                                    )}
 
-                                                    <div className="mt-1 flex items-center justify-between">
+                                                    <div className="mt-1 flex items-center justify-between border-t border-gray-50 pt-2">
                                                         {activeTab === 'missed' ? (
                                                             <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-md bg-red-50 text-red-700 text-[10px] font-bold border border-red-100">
                                                                 <AlertCircle size={10} /> +{daysPast} {daysPast === 1 ? 'Day' : 'Days'} Overdue
@@ -326,11 +348,13 @@ export function FollowupsView() {
                                                         )}
                                                     </div>
 
+
+
                                                     <button
                                                         onClick={() => navigate(`/contact/${lead._id}`)}
-                                                        className="w-full mt-1 flex items-center justify-center gap-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-bold py-2 rounded-xl border border-indigo-100 transition-colors"
+                                                        className="w-full mt-1 flex items-center justify-center gap-1.5 bg-[#1B1B19] hover:bg-black text-white text-[10px] uppercase tracking-wider font-bold py-2 rounded-xl border border-[#1B1B19] transition-colors shadow-sm shadow-gray-200"
                                                     >
-                                                        <Eye size={14} /> View Lead
+                                                        <Eye size={12} /> View Lead
                                                     </button>
                                                 </motion.div>
                                             );
@@ -342,15 +366,6 @@ export function FollowupsView() {
                     );
                 })}
             </div>
-
-            {
-                editingLead && (
-                    <LeadFormModal
-                        initialData={editingLead}
-                        onClose={() => setEditingLead(null)}
-                    />
-                )
-            }
         </div >
     );
 }

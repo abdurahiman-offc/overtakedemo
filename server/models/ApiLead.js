@@ -30,7 +30,7 @@ const assignmentRecordSchema = new mongoose.Schema({
     assignedBy: { type: String } // System or another user ID
 });
 
-const leadSchema = new mongoose.Schema({
+const apiLeadSchema = new mongoose.Schema({
     name: { type: String, required: true, lowercase: true },
     phone: { type: String, required: true, unique: true },
     place: { type: String, lowercase: true },
@@ -72,4 +72,4 @@ const leadSchema = new mongoose.Schema({
     }
 }, { timestamps: true });
 
-export default mongoose.model('Lead', leadSchema);
+export default mongoose.model('ApiLead', apiLeadSchema);

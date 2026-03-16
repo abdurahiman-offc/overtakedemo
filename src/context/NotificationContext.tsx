@@ -27,27 +27,14 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         return saved ? JSON.parse(saved) : [];
     });
 
-    const [audio] = useState(new Audio('https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3'));
-
     useEffect(() => {
         localStorage.setItem('crm_notifications', JSON.stringify(notifications));
     }, [notifications]);
 
-    const addNotification = useCallback((message: string, type: Notification['type'] = 'info', userName?: string) => {
-        const newNotification: Notification = {
-            id: Math.random().toString(36).substring(2, 11),
-            message,
-            timestamp: new Date().toISOString(),
-            type,
-            read: false,
-            userName
-        };
-
-        setNotifications(prev => [newNotification, ...prev].slice(0, 50)); // Keep last 50
-
-        // Play sound
-        audio.play().catch(e => console.log('Audio playback failed', e));
-    }, [audio]);
+    const addNotification = useCallback((_message: string, _type: Notification['type'] = 'info', _userName?: string) => {
+        // Notification feature stopped as requested
+        return;
+    }, []);
 
     const markAsRead = (id: string) => {
         setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));

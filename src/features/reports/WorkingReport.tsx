@@ -8,135 +8,106 @@ export function WorkingReport() {
 
     const [selectedDate, setSelectedDate] = useState(format(new Date(), 'yyyy-MM-dd'));
 
-    const reportData = users.map(user => {
+    const today = startOfDay(new Date());
+    const now = new Date();
+    const isAfter6PM = now.getHours() >= 18;
+
+    // 1. Cumulative KPI Data (Historical up to Yesterday)
+    const cumulativeData = users.map(user => {
         const userLeads = leads.filter(l => {
-            const assignedToId = typeof l.assignedTo === 'object' ? l.assignedTo._id : l.assignedTo;
+            const assignedToId = typeof l.assignedTo === 'object' ? l.assignedTo?._id : l.assignedTo;
             return assignedToId === user._id;
         });
 
-        const today = startOfDay(new Date());
-        const filterDate = startOfDay(parseISO(selectedDate));
-        const isToday = isSameDay(filterDate, today);
-
-        // All history for this user
         const userHistory = leads.flatMap(l => (l.followupHistory || []).filter(h => h.userId === user._id));
 
-        // Handled on filterDate (Activity on that day)
-        const handledOnDate = userHistory.filter(h => isSameDay(parseISO(h.completedDate), filterDate));
-        const completedOnDate = handledOnDate.filter(h => h.result === 'responded').length;
-        const noResponseOnDate = handledOnDate.filter(h => h.result === 'not_responded').length;
-        const rescheduledOnDate = handledOnDate.filter(h => h.result === 'rescheduled').length;
+        // Everything scheduled BEFORE today
+        const historicalHandled = userHistory.filter(h => h.scheduledDate && startOfDay(parseISO(h.scheduledDate)) < today);
+        const completed = historicalHandled.filter(h => h.result === 'responded').length;
+        const noResponse = historicalHandled.filter(h => h.result === 'not_responded').length;
 
-        // Due on filterDate (Items still in the queue for that date)
-        const dueOnDate = userLeads.filter(l => {
+        // Everything STILL PENDING scheduled BEFORE today
+        const missed = userLeads.filter(l => {
             if (!l.followupDate) return false;
-            return isSameDay(parseISO(l.followupDate), filterDate);
+            return startOfDay(parseISO(l.followupDate as string)) < today;
         }).length;
 
-        // Missed (Items due BEFORE filterDate and still pending)
-        const missedOnDate = userLeads.filter(l => {
-            if (!l.followupDate || l.status === 'sold' || l.status === 'deal_closed') return false;
-            const fDate = parseISO(l.followupDate);
-            return startOfDay(fDate) < filterDate;
+        const total = historicalHandled.length + missed;
+
+        return { ...user, total, completed, noResponse, missed };
+    });
+
+    // 2. Daily Performance Data (Selected Date)
+    const dailyData = users.map(user => {
+        const userLeads = leads.filter(l => {
+            const assignedToId = typeof l.assignedTo === 'object' ? l.assignedTo?._id : l.assignedTo;
+            return assignedToId === user._id;
+        });
+
+        const filterDate = startOfDay(parseISO(selectedDate));
+        const isToday = isSameDay(filterDate, today);
+        
+        const userHistory = leads.flatMap(l => (l.followupHistory || []).filter(h => h.userId === user._id));
+
+        const dailyHandled = userHistory.filter(h => h.scheduledDate && isSameDay(parseISO(h.scheduledDate), filterDate));
+        const completed = dailyHandled.filter(h => h.result === 'responded').length;
+        const noResponse = dailyHandled.filter(h => h.result === 'not_responded').length;
+
+        const dailyPending = userLeads.filter(l => {
+            if (!l.followupDate) return false;
+            return isSameDay(parseISO(l.followupDate as string), filterDate);
         }).length;
 
-        // Total = Everything handled + Everything still due (including missed)
-        const total = completedOnDate + noResponseOnDate + rescheduledOnDate + dueOnDate + (isToday ? missedOnDate : 0);
+        const upcoming = userLeads.filter(l => {
+            if (!l.followupDate) return false;
+            return startOfDay(parseISO(l.followupDate as string)) > today;
+        }).length;
 
-        return {
-            ...user,
-            total,
-            completed: completedOnDate,
-            noResponse: noResponseOnDate,
-            rescheduled: rescheduledOnDate,
-            missed: missedOnDate
+        // Missed logic for the specific day
+        const missed = (filterDate < today || (isToday && isAfter6PM)) ? dailyPending : 0;
+        const scheduled = dailyHandled.length + dailyPending;
+
+        return { 
+            ...user, 
+            scheduled, 
+            completed, 
+            noResponse, 
+            missed, 
+            upcoming,
+            isFinalized: !isToday || isAfter6PM
         };
     });
 
-    const totalStats = {
-        total: reportData.reduce((acc, curr) => acc + curr.total, 0),
-        completed: reportData.reduce((acc, curr) => acc + curr.completed, 0),
-        noResponse: reportData.reduce((acc, curr) => acc + curr.noResponse, 0),
-        missed: reportData.reduce((acc, curr) => acc + curr.missed, 0),
-        rescheduled: reportData.reduce((acc, curr) => acc + curr.rescheduled, 0)
-    };
-
     return (
-        <div className="flex flex-col gap-8">
-            <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-6">
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-indigo-500 font-bold text-sm uppercase tracking-wider">
-                        <TrendingUp size={16} />
-                        Total Followups
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{totalStats.total} <span className="text-sm font-normal text-gray-400">Items</span></div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-emerald-500 font-bold text-sm uppercase tracking-wider">
-                        <TrendingUp size={16} />
-                        Completed
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{totalStats.completed}</div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-orange-500 font-bold text-sm uppercase tracking-wider">
-                        <AlertCircle size={16} />
-                        No Response
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{totalStats.noResponse}</div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-red-500 font-bold text-sm uppercase tracking-wider">
-                        <AlertCircle size={16} />
-                        Missed
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{totalStats.missed}</div>
-                </div>
-                <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col gap-2">
-                    <div className="flex items-center gap-2 text-blue-500 font-bold text-sm uppercase tracking-wider">
-                        <TrendingUp size={16} />
-                        Rescheduled
-                    </div>
-                    <div className="text-3xl font-bold text-gray-900">{totalStats.rescheduled}</div>
-                </div>
-            </div>
-
+        <div className="flex flex-col gap-10">
+            {/* Historical KPI Section */}
             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="px-6 py-5 border-b border-gray-100 bg-gray-50 flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                        <PieChart size={20} className="text-indigo-600" />
-                        <h3 className="font-bold text-gray-900">User Follow-up Performance</h3>
+                        <TrendingUp size={20} className="text-[#1B1B19]" />
+                        <h3 className="font-bold text-gray-900">Historical Performance KPI (Up to Yesterday)</h3>
                     </div>
-
-                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-gray-200">
-                        <CalendarIcon size={16} className="text-gray-400" />
-                        <input
-                            type="date"
-                            value={selectedDate}
-                            onChange={(e) => setSelectedDate(e.target.value)}
-                            className="text-sm font-medium text-gray-700 outline-none"
-                        />
+                    <div className="px-3 py-1 bg-gray-100 text-[#1B1B19] rounded-full text-[10px] font-bold uppercase tracking-wider border border-gray-200">
+                        Cumulative Summary
                     </div>
                 </div>
-
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead>
                             <tr className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100">
-                                <th className="px-6 py-4">User</th>
-                                <th className="px-6 py-4 text-center">Total</th>
+                                <th className="px-6 py-4">Sales Representative</th>
+                                <th className="px-6 py-4 text-center">Total Scheduled</th>
                                 <th className="px-6 py-4 text-center">Completed</th>
-                                <th className="px-6 py-4 text-center">No Response</th>
-                                <th className="px-6 py-4 text-center">Missed</th>
-                                <th className="px-6 py-4 text-center">Rescheduled</th>
+                                <th className="px-6 py-4 text-center">Not Responded</th>
+                                <th className="px-6 py-4 text-center">Total Missed</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
-                            {reportData.map(user => (
+                            {cumulativeData.map(user => (
                                 <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
                                     <td className="px-6 py-4">
                                         <div className="flex items-center gap-3">
-                                            <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600 font-bold uppercase">
+                                            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-[#1B1B19] font-bold uppercase">
                                                 {user.username.charAt(0)}
                                             </div>
                                             <div className="flex flex-col">
@@ -149,16 +120,72 @@ export function WorkingReport() {
                                     <td className="px-6 py-4 text-center font-bold text-emerald-600">{user.completed}</td>
                                     <td className="px-6 py-4 text-center font-bold text-orange-600">{user.noResponse}</td>
                                     <td className="px-6 py-4 text-center font-bold text-red-600">{user.missed}</td>
-                                    <td className="px-6 py-4 text-center font-bold text-blue-600">{user.rescheduled}</td>
                                 </tr>
                             ))}
-                            {reportData.length === 0 && (
-                                <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-sm text-gray-400 italic">
-                                        No users found to generate report.
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            {/* Daily Performance Section */}
+            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex items-center gap-3 bg-white px-3 py-1.5 rounded-xl border border-gray-200">
+                        <CalendarIcon size={16} className="text-gray-400" />
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="text-sm font-medium text-gray-700 outline-none"
+                        />
+                    </div>
+
+                    <div className="flex items-center gap-2 sm:ml-auto">
+                        <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            dailyData[0]?.isFinalized 
+                                ? 'bg-emerald-100 text-emerald-700 border border-emerald-200' 
+                                : 'bg-amber-100 text-amber-700 border border-amber-200 animate-pulse'
+                        }`}>
+                            <AlertCircle size={10} />
+                            {dailyData[0]?.isFinalized ? 'Report Finalized' : 'Live Report (Finalizes at 6 PM)'}
+                        </div>
+                            <PieChart size={20} className="text-[#1B1B19]" />
+                        <h3 className="font-bold text-gray-900">Daily Performance - {isSameDay(parseISO(selectedDate), today) ? "Today" : format(parseISO(selectedDate), 'dd/MM/yyyy')}</h3>
+                    </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                        <thead>
+                            <tr className="text-[10px] font-bold uppercase tracking-widest text-gray-400 border-b border-gray-100">
+                                <th className="px-6 py-4">Sales Representative</th>
+                                <th className="px-6 py-4 text-center">Scheduled</th>
+                                <th className="px-6 py-4 text-center">Completed</th>
+                                <th className="px-6 py-4 text-center">Not Responded</th>
+                                <th className="px-6 py-4 text-center">Missed</th>
+                                <th className="px-6 py-4 text-center text-blue-600 font-extrabold">Upcoming</th>
+                            </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                            {dailyData.map(user => (
+                                <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
+                                    <td className="px-6 py-4">
+                                        <div className="flex items-center gap-3">
+                                            <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-[#1B1B19] font-bold uppercase">
+                                                {user.username.charAt(0)}
+                                            </div>
+                                            <div className="flex flex-col">
+                                                <span className="font-bold text-gray-900 text-sm">{user.username}</span>
+                                            </div>
+                                        </div>
                                     </td>
+                                    <td className="px-6 py-4 text-center font-bold text-gray-700">{user.scheduled}</td>
+                                    <td className="px-6 py-4 text-center font-bold text-emerald-600">{user.completed}</td>
+                                    <td className="px-6 py-4 text-center font-bold text-orange-600">{user.noResponse}</td>
+                                    <td className="px-6 py-4 text-center font-bold text-red-600">{user.missed}</td>
+                                    <td className="px-6 py-4 text-center font-bold text-blue-600 bg-blue-50/30">{user.upcoming}</td>
                                 </tr>
-                            )}
+                            ))}
                         </tbody>
                     </table>
                 </div>
